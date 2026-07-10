@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twelfth Space · Payments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root{
+    --brand:#3d4631; --brand-2:#2f3726; --brand-3:#4a5640;
+    --lime:#eaff7a; --lime-2:#d7ef7f; --lime-deep:#8fa82f; --lime-txt:#586c15;
+    --mint:#ebf4e1;
+    --bg:#f2f5ea; --surface:#ffffff; --line:#e3ead6;
+    --ink:#242b1c; --ink-soft:#3a4530; --muted:#77836a; --muted-2:#a6b096;
+    --in:#3f8f5b; --out:#cf7a2c; --exp:#b4573a; --owe:#cf4438; --net:#3d4631;
+    --full:#3f8f5b; --part:#d19a34; --dep:#3f8f92;
+    --bank:#41708f; --mobile:#3f8f5b;
+    --radius:16px; --radius-sm:11px;
+    --shadow:0 12px 34px -14px rgba(35,40,20,.4);
+    --shadow-sm:0 4px 14px -6px rgba(35,40,20,.28);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;max-width:100%;overflow-x:hidden}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh;
+    background:radial-gradient(900px 520px at 100% -10%,rgba(143,168,47,.12),transparent 60%),
+      radial-gradient(760px 480px at -8% 0%,rgba(61,70,49,.10),transparent 55%),var(--bg)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+
+  /* ---- header ---- */
+  .header{position:relative;overflow:hidden;border-radius:var(--radius);
+    background:linear-gradient(135deg,var(--brand) 0%,var(--brand-2) 100%);color:#fff;padding:24px 26px;box-shadow:var(--shadow)}
+  .stars{position:absolute;inset:0;pointer-events:none}
+  .stars i{position:absolute;background:var(--lime);border-radius:50%;opacity:.5}
+  /* ---- auth gate ---- */
+  #authGate{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:22px;
+    background:radial-gradient(900px 520px at 100% -10%,rgba(143,168,47,.18),transparent 60%),
+      radial-gradient(760px 480px at -8% 0%,rgba(61,70,49,.16),transparent 55%),var(--bg,#eef1e4)}
+  #authGate.show{display:flex}
+  .auth-card{width:100%;max-width:380px;background:#fff;border:1px solid var(--line,#e2e6d5);border-radius:18px;
+    box-shadow:0 18px 50px rgba(47,55,38,.18);padding:26px 22px}
+  .auth-card h1{font-family:'Space Grotesk',sans-serif;font-size:21px;margin:0 0 3px;color:var(--ink,#2f3726)}
+  .auth-card p.sub{margin:0 0 18px;font-size:13px;color:#7b856b}
+  .auth-card label{display:block;font-size:12px;font-weight:600;color:#5c6650;margin:12px 0 5px}
+  .auth-card input{width:100%;min-width:0;padding:12px;border:1.5px solid var(--line,#e2e6d5);border-radius:11px;
+    font-family:'Inter';font-size:15px;color:var(--ink,#2f3726);background:#fbfcf8}
+  .auth-card input:focus{outline:none;border-color:var(--lime-deep,#8fa82f)}
+  .auth-btn{width:100%;margin-top:18px;padding:13px;border:none;border-radius:11px;font-family:'Inter';
+    font-size:15px;font-weight:600;cursor:pointer;background:var(--brand,#3d4631);color:#eaff7a}
+  .auth-btn:disabled{opacity:.6;cursor:default}
+  .auth-alt{width:100%;margin-top:9px;padding:11px;border:1.5px solid var(--line,#e2e6d5);border-radius:11px;
+    background:none;font-family:'Inter';font-size:14px;font-weight:600;color:#5c6650;cursor:pointer}
+  .auth-msg{margin-top:13px;font-size:13px;min-height:17px;line-height:1.4}
+  .auth-msg.err{color:#b1462f}.auth-msg.ok{color:#5f7d1f}
+  .brandrow{position:relative;display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+  .mark{height:50px;width:auto;flex:0 0 auto;filter:drop-shadow(0 2px 6px rgba(0,0,0,.25))}
+  .logo-full{height:52px;width:auto;flex:0 0 auto;filter:drop-shadow(0 2px 7px rgba(0,0,0,.28))}
+  .brand h1{font-family:'Space Grotesk';font-weight:700;font-size:25px;margin:0;letter-spacing:.4px}
+  .brand p{margin:0;font-size:12.5px;color:var(--lime-2);font-weight:500;letter-spacing:.3px}
+  .divline{width:1px;height:38px;background:rgba(255,255,255,.18)}
+  .brand-lockup{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+  .spacer{flex:1}
+  .exp{position:relative}
+  .ghost{background:rgba(234,255,122,.16);border:1px solid rgba(234,255,122,.4);color:var(--lime);
+    padding:9px 14px;border-radius:10px;font-family:'Inter';font-size:13px;font-weight:600;cursor:pointer;
+    transition:.18s;display:inline-flex;align-items:center;gap:7px}
+  .ghost:hover{background:rgba(234,255,122,.26)}
+  .menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:12px;box-shadow:var(--shadow);
+    border:1px solid var(--line);padding:6px;min-width:176px;z-index:30;display:none}
+  .menu.open{display:block}
+  .menu button{width:100%;text-align:left;background:none;border:none;padding:9px 11px;border-radius:8px;
+    font-family:'Inter';font-size:13.5px;font-weight:500;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px}
+  .menu button:hover{background:#f2f6e8}
+  .menu .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff}
+  .ic.csv{background:#6b7663}.ic.xls{background:#177245}.ic.pdf{background:#c0483b}
+
+  .cards{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:22px}
+  .card{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.18);border-radius:var(--radius-sm);padding:14px 15px;backdrop-filter:blur(6px)}
+  .card .lab{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7);font-weight:600}
+  .card .val{font-family:'Space Grotesk';font-weight:700;font-size:24px;margin-top:6px;line-height:1.05}
+  .card .sub{font-size:11.5px;color:rgba(255,255,255,.62);margin-top:3px}
+  .card.rec{background:rgba(63,143,91,.2);border-color:rgba(63,143,91,.45)}
+  .card.rec .val{color:#c7f0d4}
+  .card.sub-c{background:rgba(207,122,44,.18);border-color:rgba(207,122,44,.42)}
+  .card.sub-c .val{color:#f6d3aa}
+  .card.net{background:rgba(234,255,122,.18);border-color:rgba(234,255,122,.5)}
+  .card.net .val{color:var(--lime)}
+  .card.exp{background:rgba(180,87,58,.16);border-color:rgba(180,87,58,.42)}
+  .card.exp .val{color:#f0c2ad}
+  .card.owe{background:rgba(207,68,56,.16);border-color:rgba(207,68,56,.4)}
+  .card.owe .val{color:#f5c1bc}
+
+  .mix{position:relative;margin-top:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:12px 14px}
+  .mixbar{height:11px;border-radius:6px;overflow:hidden;display:flex;background:rgba(255,255,255,.14)}
+  .mixbar span{height:100%;transition:width .4s ease}
+  .mixleg{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+  .mixleg div{font-size:12px;color:rgba(255,255,255,.85);display:flex;align-items:center;gap:7px;font-weight:500}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+  .position{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .pos-col{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 18px}
+  .pos-h{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk';font-weight:600;font-size:13.5px;color:var(--ink);margin-bottom:10px}
+  .pdot{width:9px;height:9px;border-radius:50%}
+  .pos-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .pos-row label,.lname{font-size:13px;color:var(--muted);font-weight:500}
+  .lname{border:none;background:none;font-family:'Inter';padding:0;width:62%}
+  .lname:focus{outline:none;color:var(--ink)}
+  .pos-row.total{border-bottom:none;padding-top:11px}
+  .pos-row.total label{color:var(--ink);font-weight:600;font-size:13.5px}
+  .pin{display:flex;align-items:center;gap:2px;border:1.5px solid var(--line);border-radius:9px;padding:5px 9px;background:#fbfcf8;flex:0 0 auto}
+  .pin span{color:var(--lime-deep);font-weight:700;font-family:'Space Grotesk';font-size:13px}
+  .pin input{border:none;background:none;width:88px;text-align:right;font-family:'Space Grotesk';font-weight:600;font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .pin input:focus{outline:none}
+  .pin:focus-within{border-color:var(--brand-3);background:#fff}
+  .pval{font-family:'Space Grotesk';font-weight:700;font-size:16px;color:var(--brand);font-variant-numeric:tabular-nums}
+  .pos-row.total .pval{font-size:19px}
+  .pos-note{font-size:11.5px;color:var(--muted-2);margin-top:9px}
+  .pos-row.sub{border-bottom:1px solid var(--line)}
+  .pos-row.sub label{color:var(--ink-soft);font-weight:600}
+  .pos-row.sub .pval{font-size:15px;color:var(--ink-soft)}
+  .pval2{font-family:'Space Grotesk';font-weight:600;font-size:15px;color:var(--brand);font-variant-numeric:tabular-nums}
+  .loanrow{gap:8px}
+  .chip{font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#fff;background:var(--owe);border-radius:5px;padding:3px 6px;flex:0 0 auto}
+  .debtor-empty{font-size:12.5px;color:var(--muted-2);padding:9px 0}
+  @media (max-width:900px){.position{grid-template-columns:1fr}}
+  .health{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--muted-2);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px 20px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+  .health.good{border-left-color:var(--in)}.health.ok{border-left-color:var(--part)}.health.bad{border-left-color:var(--owe)}
+  .health-main{display:flex;align-items:center;gap:14px;flex:1;min-width:240px}
+  .health-badge{width:54px;height:54px;border-radius:14px;display:grid;place-items:center;font-size:26px;flex:0 0 auto;background:#f1f4ea}
+  .health.good .health-badge{background:rgba(63,143,91,.15)}.health.ok .health-badge{background:rgba(209,154,52,.15)}.health.bad .health-badge{background:rgba(207,68,56,.15)}
+  .health-text h3{font-family:'Space Grotesk';margin:0;font-size:17px;color:var(--ink)}
+  .health-text p{margin:3px 0 0;font-size:12.8px;color:var(--muted);max-width:560px;line-height:1.45}
+  .health-metrics{display:grid;grid-template-columns:repeat(4,auto);gap:22px}
+  .hm{display:flex;flex-direction:column;gap:2px}
+  .hm-l{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600}
+  .hm-v{font-family:'Space Grotesk';font-weight:700;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+  @media (max-width:700px){.health-metrics{grid-template-columns:1fr 1fr;gap:14px}}
+  .grid{display:grid;grid-template-columns:358px 1fr;gap:20px;margin-top:20px;align-items:start}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);min-width:0}
+  .grid>*{min-width:0}
+  .panel-h{padding:16px 20px 0}
+  .panel-h h2{font-family:'Space Grotesk';font-size:16.5px;margin:0;font-weight:600}
+  .panel-h p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+
+  /* money in/out switch */
+  .modesw{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:14px 20px 0;background:#f1f4ea;border-radius:11px;padding:4px}
+  .modesw button{flex:1;border:none;background:none;padding:9px;border-radius:8px;font-family:'Inter';font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px}
+  .modesw button .d{width:8px;height:8px;border-radius:50%}
+  .modesw button[data-m="in"] .d{background:var(--in)}
+  .modesw button[data-m="out"] .d{background:var(--out)}
+  .modesw button[data-m="job"] .d{background:var(--owe)}
+  .modesw button.on[data-m="in"]{background:#fff;color:var(--in);box-shadow:var(--shadow-sm)}
+  .modesw button.on[data-m="out"]{background:#fff;color:var(--out);box-shadow:var(--shadow-sm)}
+  .modesw button.on[data-m="job"]{background:#fff;color:var(--owe);box-shadow:var(--shadow-sm)}
+  .modesw button[data-m="expense"] .d{background:var(--exp)}
+  .modesw button.on[data-m="expense"]{background:#fff;color:var(--exp);box-shadow:var(--shadow-sm)}
+  .modesw button{font-size:11.5px;padding:9px 4px}
+
+  form{padding:14px 20px 20px;display:flex;flex-direction:column;gap:13px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;letter-spacing:.2px}
+  .field .opt{color:var(--muted-2);font-weight:500}
+  .field input{width:100%;min-width:0;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:'Inter';font-size:14px;color:var(--ink);background:#fbfcf8;transition:.15s}
+  .field input:focus{outline:none;border-color:var(--brand-3);background:#fff;box-shadow:0 0 0 3px rgba(74,86,64,.14)}
+  .amount-wrap{position:relative}
+  .amount-wrap .ces{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:700;color:var(--lime-deep);font-family:'Space Grotesk'}
+  .amount-wrap input{padding-left:26px;font-variant-numeric:tabular-nums;font-weight:600}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .two>*{min-width:0}
+  .only-in,.only-out,.only-job,.only-expense,.only-cost,.in-out,.out-job,.f-client{display:none}
+  form.mode-in .only-in{display:block}
+  form.mode-out .only-out{display:block}
+  form.mode-job .only-job{display:block}
+  form.mode-expense .only-expense{display:block}
+  form.mode-out .only-cost,form.mode-expense .only-cost{display:block}
+  .charge-preview{font-size:12px;color:var(--muted);margin-top:5px}
+  .charge-preview b{color:var(--exp)}
+  .fee-note{font-size:10.5px;font-weight:500;color:var(--muted);margin-top:1px}
+  form.mode-in .f-client,form.mode-out .f-client,form.mode-job .f-client{display:block}
+  form.mode-in .in-out,form.mode-out .in-out,form.mode-expense .in-out{display:block}
+  form.mode-out .out-job,form.mode-job .out-job,form.mode-expense .out-job{display:block}
+  .catsel{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:'Inter';font-size:14px;color:var(--ink);background:#fbfcf8}
+  .catsel:focus{outline:none;border-color:var(--brand-3);background:#fff}
+
+  .seg{display:flex;gap:7px}
+  .seg button{flex:1;padding:9px 6px;border:1.5px solid var(--line);background:#fbfcf8;border-radius:10px;font-family:'Inter';font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .seg button .mk{width:9px;height:9px;border-radius:50%;background:currentColor;opacity:.35}
+  .seg button:hover{border-color:var(--muted-2)}
+  .seg button.on{color:#fff;border-color:transparent}.seg button.on .mk{opacity:1;background:#fff}
+  .seg[data-group="type"] button[data-v="Full payment"].on{background:var(--full)}
+  .seg[data-group="type"] button[data-v="Part payment"].on{background:var(--part)}
+  .seg[data-group="type"] button[data-v="Deposit"].on{background:var(--dep)}
+  .seg[data-group="method"] button[data-v="Bank"].on{background:var(--bank)}
+  .seg[data-group="method"] button[data-v="Mobile money"].on{background:var(--mobile)}
+
+  .submit{border:none;border-radius:11px;padding:13px;font-family:'Space Grotesk';font-weight:600;font-size:14.5px;color:#fff;cursor:pointer;transition:.18s;background:linear-gradient(120deg,var(--brand-3),var(--brand));box-shadow:0 8px 18px -8px rgba(61,70,49,.7);display:flex;align-items:center;justify-content:center;gap:8px}
+  form.mode-out .submit{background:linear-gradient(120deg,#d3893f,var(--out))}
+  .submit:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .cancel-edit{display:none;background:none;border:none;color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:underline;text-align:center}
+  .editing .cancel-edit{display:block}
+
+  .ledger-top{padding:14px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+  .tabs{display:flex;background:#f1f4ea;border-radius:10px;padding:3px}
+  .tab{border:none;background:none;padding:8px 12px;border-radius:8px;font-family:'Inter';font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s}
+  .tab.on{background:#fff;color:var(--brand);box-shadow:var(--shadow-sm)}
+  .search{position:relative;flex:1;min-width:150px}
+  .search input{width:100%;padding:9px 12px 9px 32px;border:1.5px solid var(--line);border-radius:9px;font-family:'Inter';font-size:13px;background:#fbfcf8}
+  .search input:focus{outline:none;border-color:var(--brand-3);background:#fff}
+  .search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted-2)}
+  .filt{padding:8px 11px;border:1.5px solid var(--line);border-radius:9px;font-family:'Inter';font-size:13px;color:var(--ink-soft);background:#fbfcf8;font-weight:500;cursor:pointer}
+
+  .tbl-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:640px}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);background:#f7f9f1;white-space:nowrap}
+  thead th.r,tbody td.r{text-align:right}
+  tbody td{padding:13px 16px;border-bottom:1px solid #f1f3ea;font-size:13.5px;vertical-align:middle}
+  tbody tr{transition:background .12s}tbody tr:hover{background:#fafbf5}
+  .cli{font-weight:600;color:var(--ink)}
+  .prj{color:var(--muted);font-size:12.5px;margin-top:1px}
+  .amt{font-family:'Space Grotesk';font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .amt.in{color:var(--in)}.amt.out{color:var(--out)}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .badge .dot{width:7px;height:7px}
+  .b-full{background:#e6f4ec;color:#2f7049}.b-part{background:#fbf1de;color:#a5731f}.b-dep{background:#e4f1f2;color:#2f7078}
+  .b-bank{background:#e7f0f5;color:#31627f}.b-mob{background:#e6f4ec;color:#2f7049}
+  .b-ok{background:#e6f4ec;color:#2f7049}.b-owe{background:#fbe9e7;color:#b23a30}.b-na{background:#eef1e8;color:#78846b}
+  .best-year{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#eef6df,#e2f0d9);border:1px solid #cfe3b8;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .best-year .by-ic{font-size:22px;flex:0 0 auto}
+  .best-year .by-t{font-family:'Space Grotesk';font-weight:700;font-size:15px;color:var(--brand)}
+  .best-year .by-s{font-size:12.5px;color:var(--muted);margin-top:1px}
+  tr.best-row td{background:#f5faec}
+  .date{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .owe-amt{color:var(--owe);font-family:'Space Grotesk';font-weight:600;font-variant-numeric:tabular-nums}
+  .net-amt{color:var(--brand);font-family:'Space Grotesk';font-weight:700;font-variant-numeric:tabular-nums}
+  .rowbtns{display:flex;gap:4px;justify-content:flex-end}
+  .icob{border:none;background:#f0f3ea;width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--muted);display:grid;place-items:center;transition:.15s}
+  .icob:hover{background:#e7efd8;color:var(--brand)}.icob.del:hover{background:#fbe9e7;color:var(--owe)}
+  .acts{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+  .recbtn{border:1.5px solid var(--brand);background:#fff;color:var(--brand);padding:6px 10px;border-radius:8px;font-family:'Inter';font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.15s}
+  .recbtn:hover{background:var(--brand);color:#fff}
+  .subbtn{border:1.5px solid var(--out);background:#fff;color:var(--out);padding:6px 10px;border-radius:8px;font-family:'Inter';font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.15s}
+  .subbtn:hover{background:var(--out);color:#fff}
+  tfoot td{padding:14px 16px;font-size:13px;font-weight:600;border-top:2px solid var(--line);background:#f7f9f1}
+  tfoot .amt{font-size:15px;color:var(--brand)}
+
+  .empty{padding:52px 24px;text-align:center;color:var(--muted)}
+  .empty .em-ic{width:60px;height:60px;border-radius:16px;background:linear-gradient(120deg,#eef6dc,#e4f0ec);display:grid;place-items:center;margin:0 auto 14px;font-size:28px}
+  .empty h3{font-family:'Space Grotesk';color:var(--ink);margin:0 0 5px;font-size:16px}
+  .empty p{margin:0;font-size:13px}
+  .hidden{display:none!important}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(30px);background:var(--brand);color:#fff;padding:11px 18px;border-radius:11px;font-size:13.5px;font-weight:500;box-shadow:var(--shadow);opacity:0;transition:.3s;pointer-events:none;z-index:50;display:flex;align-items:center;gap:9px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .tick{color:var(--lime)}
+  @keyframes rowin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .rowin{animation:rowin .3s ease}
+
+  @media (max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}}
+  @media (max-width:560px){.wrap{padding:14px 12px 46px}.cards{grid-template-columns:1fr 1fr;gap:9px}.card .val{font-size:20px}.brand h1{font-size:21px}
+    .menu{right:auto;left:0;max-width:calc(100vw - 28px)}
+    .tabs{max-width:100%;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;white-space:nowrap;padding:8px 10px}}
+  @media (max-width:560px){
+    /* ledger tables -> stacked cards, no sideways scrolling */
+    .tbl-scroll{overflow-x:visible}
+    .tbl-scroll table{min-width:0;width:100%;display:block}
+    .tbl-scroll thead{display:none}
+    .tbl-scroll tbody{display:block}
+    .tbl-scroll tbody tr{display:block;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:0 0 10px;background:#fff}
+    .tbl-scroll tbody tr:hover{background:#fff}
+    .tbl-scroll tbody td{display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:right;padding:6px 0;border:none}
+    .tbl-scroll tbody td::before{content:attr(data-label);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap;flex:0 0 auto}
+    .tbl-scroll tbody td:first-child{display:block;text-align:left;padding-top:0;margin-bottom:3px}
+    .tbl-scroll tbody td:first-child::before{display:none}
+    .tbl-scroll tbody td .acts,.tbl-scroll tbody td .rowbtns{justify-content:flex-end;flex-wrap:wrap}
+    #paymentsView tbody td:nth-child(2)::before{content:"Amount"}
+    #paymentsView tbody td:nth-child(3)::before{content:"Type"}
+    #paymentsView tbody td:nth-child(4)::before{content:"Method"}
+    #paymentsView tbody td:nth-child(5)::before{content:"Date"}
+    #paymentsView tbody td:nth-child(6)::before{content:"Actions"}
+    #owedView tbody td:nth-child(2)::before{content:"Amount owed"}
+    #owedView tbody td:nth-child(3)::before{content:"Status"}
+    #owedView tbody td:nth-child(4)::before{content:"Actions"}
+    #subsView tbody td:nth-child(2)::before{content:"For"}
+    #subsView tbody td:nth-child(3)::before{content:"Amount"}
+    #subsView tbody td:nth-child(4)::before{content:"Method"}
+    #subsView tbody td:nth-child(5)::before{content:"Date"}
+    #subsView tbody td:nth-child(6)::before{content:"Actions"}
+    #projectsView tbody td:nth-child(2)::before{content:"Received"}
+    #projectsView tbody td:nth-child(3)::before{content:"To subs"}
+    #projectsView tbody td:nth-child(4)::before{content:"Net kept"}
+    #projectsView tbody td:nth-child(5)::before{content:"Owed"}
+    #projectsView tbody td:nth-child(6)::before{content:"Actions"}
+    #expensesView tbody td:nth-child(2)::before{content:"Category"}
+    #expensesView tbody td:nth-child(3)::before{content:"Amount"}
+    #expensesView tbody td:nth-child(4)::before{content:"Method"}
+    #expensesView tbody td:nth-child(5)::before{content:"Date"}
+    #yearlyView tbody td:nth-child(2)::before{content:"Received"}
+    #yearlyView tbody td:nth-child(3)::before{content:"Paid subs"}
+    #yearlyView tbody td:nth-child(4)::before{content:"Expenses"}
+    #yearlyView tbody td:nth-child(5)::before{content:"Net profit"}
+    #yearlyView tbody td:nth-child(6)::before{content:"Entries"}
+    #expensesView tbody td:nth-child(6)::before{content:"Actions"}
+    .tbl-scroll tfoot{display:block}
+    .tbl-scroll tfoot tr{display:flex;justify-content:space-between;gap:12px;padding:11px 2px 2px;border-top:2px solid var(--line);font-weight:700;font-size:13px}
+    .tbl-scroll tfoot td{border:none;padding:0}
+    .tbl-scroll tfoot td:empty{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="authGate">
+  <div class="auth-card">
+    <h1>Twelfth Space</h1>
+    <p class="sub">Sign in to sync your ledger across your phone and laptop.</p>
+    <label for="authEmail">Email</label>
+    <input id="authEmail" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+    <label for="authPass">Password</label>
+    <input id="authPass" type="password" autocomplete="current-password" placeholder="At least 6 characters">
+    <button class="auth-btn" id="authSignIn">Sign in</button>
+    <button class="auth-alt" id="authSignUp">Create an account</button>
+    <div class="auth-msg" id="authMsg"></div>
+  </div>
+</div>
+<div class="wrap">
+  <div id="syncBadge" style="display:none;margin:0 0 14px;padding:11px 14px;border-radius:12px;background:#fbe7d8;border:1px solid #eccfa8;color:#8a5a20;font-size:13px;line-height:1.45"></div>
+  <div id="logReminder" style="display:none;align-items:center;gap:10px;margin:0 0 14px;padding:11px 14px;border-radius:12px;background:#fff7e0;border:1px solid #f0d98a;color:#7a5b12;font-size:13px;line-height:1.45">
+    <span style="font-size:16px">\u23F0</span><span id="logReminderText" style="flex:1"></span>
+    <button id="logReminderX" title="Dismiss" style="background:none;border:none;color:#7a5b12;font-size:18px;cursor:pointer;line-height:1;padding:0 2px">\u00D7</button>
+  </div>
+  <datalist id="dlClients"></datalist><datalist id="dlProjects"></datalist><datalist id="dlSubs"></datalist><datalist id="dlDescs"></datalist>
+  <header class="header">
+    <div class="stars" id="stars"></div>
+    <div class="brandrow">
+      <div class="brand-lockup"><img class="logo-full" src="data:image/png;base64,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" alt="Twelfth Space"><div class="brand"><p>Client payments &amp; subcontractor ledger · ₵</p></div></div>
+      <div class="spacer"></div>
+      <div class="exp">
+        <button class="ghost" id="exportBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="menu" id="exportMenu">
+          <button data-x="csv"><span class="ic csv">CSV</span>Export as CSV</button>
+          <button data-x="xlsx"><span class="ic xls">XLS</span>Export as Excel</button>
+          <button data-x="pdf"><span class="ic pdf">PDF</span>Export as PDF</button>
+          <button id="signOutBtn"><span class="ic" style="background:#8a5a3c">⎋</span>Sign out</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card rec"><div class="lab">Received from clients</div><div class="val num" id="sRec">₵0.00</div><div class="sub"><span id="sClients">0</span> clients · <span id="sInN">0</span> payments</div></div>
+      <div class="card sub-c"><div class="lab">Paid to subcontractors</div><div class="val num" id="sSub">₵0.00</div><div class="sub"><span id="sOutN">0</span> payouts</div></div>
+      <div class="card exp"><div class="lab">Total expenses</div><div class="val num" id="sExp">₵0.00</div><div class="sub"><span id="sExpN">0</span> expense entries</div></div>
+      <div class="card net"><div class="lab">Net profit</div><div class="val num" id="sNet">₵0.00</div><div class="sub" id="sNetSub">after subs &amp; expenses</div></div>
+      <div class="card owe"><div class="lab">Outstanding</div><div class="val num" id="sOwed">₵0.00</div><div class="sub"><span id="sOweN">0</span> projects with a balance</div></div>
+    </div>
+
+    <div class="mix">
+      <div class="mixbar">
+        <span id="mFull" style="width:0;background:var(--full)"></span>
+        <span id="mPart" style="width:0;background:var(--part)"></span>
+        <span id="mDep" style="width:0;background:var(--dep)"></span>
+      </div>
+      <div class="mixleg">
+        <div><span class="dot" style="background:var(--full)"></span>Full · <b class="num" id="lFull">₵0</b></div>
+        <div><span class="dot" style="background:var(--part)"></span>Part · <b class="num" id="lPart">₵0</b></div>
+        <div><span class="dot" style="background:var(--dep)"></span>Deposit · <b class="num" id="lDep">₵0</b></div>
+      </div>
+    </div>
+  </header>
+
+  <section class="position">
+    <div class="pos-col">
+      <div class="pos-h"><span class="pdot" style="background:var(--in)"></span>What the business holds</div>
+      <div class="pos-row"><label>Bank (Stanbic)</label><div class="pval2" id="posBank">₵0.00</div></div>
+      <div class="pos-row"><label>Mobile money (MoMo)</label><div class="pval2" id="posMomo">₵0.00</div></div>
+      <div class="pos-row sub"><label>Cash available now</label><div class="pval num" id="posAvail">₵0.00</div></div>
+      <div class="pos-row"><label>Treasury Bill · invested</label><div class="pval2" id="posTbill">₵0.00</div></div>
+      <div class="pos-row total"><label>Total holdings</label><div class="pval num" id="posHold">₵0.00</div></div>
+
+      <div class="pos-note">These update automatically from every entry you log — the account you choose (Bank or MoMo) decides which balance moves.</div>
+    </div>
+    <div class="pos-col">
+      <div class="pos-h"><span class="pdot" style="background:var(--owe)"></span>Owed to the business</div>
+      <div id="debtorRows"></div>
+      <div class="pos-row loanrow" id="loanRow"><span class="chip">LOAN</span><label id="posLoanName" style="flex:1">Jason J. Adu Poku</label><div class="pval2" id="posLoan">₵0.00</div></div>
+      <div class="pos-row total"><label>Total owed to us</label><div class="pval num" id="posOwed">₵0.00</div></div>
+      <div class="pos-note">Client debts come from your Owed jobs and drop automatically as you log their payments.</div>
+    </div>
+  </section>
+
+  <section class="health" id="healthCard">
+    <div class="health-main">
+      <div class="health-badge" id="healthBadge">—</div>
+      <div class="health-text">
+        <h3 id="healthTitle">Financial health</h3>
+        <p id="healthMsg">Add your figures to see how the business is doing.</p>
+      </div>
+    </div>
+    <div class="health-metrics">
+      <div class="hm"><span class="hm-l">Profit margin</span><span class="hm-v" id="hMargin">—</span></div>
+      <div class="hm"><span class="hm-l">Net profit</span><span class="hm-v" id="hProfit">—</span></div>
+      <div class="hm"><span class="hm-l">Cash on hand</span><span class="hm-v" id="hCash">—</span></div>
+      <div class="hm"><span class="hm-l">Owed to you</span><span class="hm-v" id="hOwed">—</span></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <!-- FORM -->
+    <section class="panel" id="formPanel">
+      <div class="panel-h"><h2 id="formTitle">Log an entry</h2><p id="formHint">Record money coming in, or money paid out to a subcontractor.</p></div>
+      <div class="modesw" id="modeSw">
+        <button type="button" data-m="in" class="on"><span class="d"></span>Money in</button>
+        <button type="button" data-m="out"><span class="d"></span>Subcontractor</button>
+        <button type="button" data-m="job"><span class="d"></span>Owed job</button>
+        <button type="button" data-m="expense"><span class="d"></span>Expense</button>
+      </div>
+      <form id="payForm" class="mode-in" autocomplete="off">
+        <div class="field f-client"><label for="client">Client name</label><input id="client" type="text" list="dlClients" placeholder="e.g. Adom Ventures"></div>
+        <div class="field f-client"><label for="project">Project name</label><input id="project" type="text" list="dlProjects" placeholder="e.g. Brand identity"></div>
+        <div class="field only-expense"><label for="expdesc">What was it for?</label><input id="expdesc" type="text" list="dlDescs" placeholder="e.g. Internet bundle"></div>
+        <div class="field only-expense"><label for="expcat">Category</label><select id="expcat" class="catsel"><option>Internet Data</option><option>Subscriptions</option><option>Transport</option><option>Design &amp; Printing</option><option>Delivery</option><option>Asset</option><option>Owner draw</option><option>Other</option></select></div>
+
+        <!-- subcontractor name (out only) -->
+        <div class="field only-out"><label for="subname">Subcontractor / person paid</label><input id="subname" type="text" list="dlSubs" placeholder="e.g. Kwame — video editor"></div>
+
+        <div class="two">
+          <div class="field"><label for="amount" id="amountLbl">Amount received</label>
+            <div class="amount-wrap"><span class="ces">₵</span><input id="amount" type="number" min="0" step="0.01" placeholder="0.00"></div></div>
+          <div class="field only-in"><label for="total">Project total <span class="opt">(optional)</span></label>
+            <div class="amount-wrap"><span class="ces">₵</span><input id="total" type="number" min="0" step="0.01" placeholder="0.00"></div></div>
+        </div>
+
+        <div class="field only-cost"><label for="chargePct">Transaction charge <span class="opt">(% fee on this payment)</span></label>
+          <input id="chargePct" type="number" min="0" step="0.1" value="1" placeholder="1">
+          <div id="chargePreview" class="charge-preview"></div></div>
+
+        <div class="field only-in"><label>Payment type</label>
+          <div class="seg" data-group="type">
+            <button type="button" data-v="Full payment" class="on"><span class="mk"></span>Full</button>
+            <button type="button" data-v="Part payment"><span class="mk"></span>Part</button>
+            <button type="button" data-v="Deposit"><span class="mk"></span>Deposit</button>
+          </div></div>
+
+        <div class="field in-out"><label>Method</label>
+          <div class="seg" data-group="method">
+            <button type="button" data-v="Bank" class="on"><span class="mk"></span>Bank</button>
+            <button type="button" data-v="Mobile money"><span class="mk"></span>Mobile money</button>
+          </div></div>
+
+        <div class="field out-job"><label for="note">Note <span class="opt">(optional)</span></label><input id="note" type="text" placeholder="e.g. editing + colour grade"></div>
+        <div class="field"><label for="date" id="dateLbl">Date</label><input id="date" type="date"></div>
+
+        <button type="submit" class="submit" id="submitBtn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span id="submitLabel">Add payment</span></button>
+        <button type="button" class="cancel-edit" id="cancelEdit">Cancel edit</button>
+      </form>
+    </section>
+
+    <!-- LEDGER -->
+    <section class="panel">
+      <div class="ledger-top">
+        <div class="tabs">
+          <button class="tab on" data-tab="payments">Payments</button>
+          <button class="tab" data-tab="owed">Owed</button>
+          <button class="tab" data-tab="subs">Subcontractors</button>
+          <button class="tab" data-tab="projects">Projects</button>
+          <button class="tab" data-tab="expenses">Expenses</button>
+          <button class="tab" data-tab="yearly">Yearly</button>
+        </div>
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="search" type="text" placeholder="Search client, project or person…">
+        </div>
+        <select class="filt payonly" id="fMethod"><option value="">All methods</option><option>Bank</option><option>Mobile money</option></select>
+      </div>
+
+      <!-- payments (money in) -->
+      <div id="paymentsView">
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>Client / Project</th><th class="r">Amount</th><th>Type</th><th>Method</th><th>Date</th><th class="r">Actions</th></tr></thead>
+          <tbody id="rowsIn"></tbody>
+          <tfoot id="footIn" style="display:none"><tr><td>Grand total received</td><td class="r amt num" id="footInTotal">₵0.00</td><td colspan="4"></td></tr></tfoot>
+        </table></div>
+      </div>
+
+      <!-- owed (client debts, unpaid) -->
+      <div id="owedView" class="hidden">
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>Client / Project</th><th class="r">Amount owed</th><th>Status</th><th class="r">Actions</th></tr></thead>
+          <tbody id="rowsOwed"></tbody>
+          <tfoot id="footOwed" style="display:none"><tr><td>Total owed to you</td><td class="r amt num" id="footOwedTotal">₵0.00</td><td colspan="2"></td></tr></tfoot>
+        </table></div>
+      </div>
+
+      <!-- subcontractors (money out) -->
+      <div id="subsView" class="hidden">
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>Subcontractor</th><th>For (client / project)</th><th class="r">Amount</th><th>Method</th><th>Date</th><th class="r">Actions</th></tr></thead>
+          <tbody id="rowsOut"></tbody>
+          <tfoot id="footOut" style="display:none"><tr><td>Total paid out</td><td></td><td class="r amt num" id="footOutTotal">₵0.00</td><td colspan="3"></td></tr></tfoot>
+        </table></div>
+      </div>
+
+      <!-- projects summary -->
+      <div id="projectsView" class="hidden">
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>Client / Project</th><th class="r">Received</th><th class="r">To subs</th><th class="r">Net kept</th><th class="r">Owed by client</th><th class="r">Actions</th></tr></thead>
+          <tbody id="rowsProj"></tbody>
+        </table></div>
+      </div>
+
+      <div id="expensesView" class="hidden">
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>What for</th><th>Category</th><th class="r">Amount</th><th>Method</th><th>Date</th><th class="r">Actions</th></tr></thead>
+          <tbody id="rowsExp"></tbody>
+          <tfoot id="footExp" style="display:none"><tr><td>Total expenses</td><td></td><td class="r amt num" id="footExpTotal">₵0.00</td><td colspan="3"></td></tr></tfoot>
+        </table></div>
+      </div>
+
+      <!-- yearly summary -->
+      <div id="yearlyView" class="hidden">
+        <div id="bestYear" class="best-year" style="display:none"></div>
+        <div class="tbl-scroll"><table>
+          <thead><tr><th>Year</th><th class="r">Received</th><th class="r">Paid subs</th><th class="r">Expenses</th><th class="r">Net profit</th><th class="r">Entries</th></tr></thead>
+          <tbody id="rowsYear"></tbody>
+          <tfoot id="footYear" style="display:none"><tr><td>All-time</td><td class="r amt num" id="footYearRec">₵0.00</td><td class="r amt num" id="footYearSub">₵0.00</td><td class="r amt num" id="footYearExp">₵0.00</td><td class="r amt num" id="footYearNet">₵0.00</td><td class="r" id="footYearN">0</td></tr></tfoot>
+        </table></div>
+      </div>
+
+      <div class="empty" id="empty">
+        <div class="em-ic">🛰️</div><h3>Nothing logged yet</h3>
+        <p>Add your first client payment on the left and it will appear right here.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="tick">✓</span><span id="toastMsg">Saved</span></div>
+
+<script>
+/* ---------- starfield ---------- */
+(function(){const s=document.getElementById('stars');let h='';
+  for(let i=0;i<30;i++){const sz=Math.random()*2+1;h+=`<i style="left:${Math.random()*100}%;top:${Math.random()*100}%;width:${sz}px;height:${sz}px;opacity:${Math.random()*.45+.15}"></i>`;}
+  s.innerHTML=h;})();
+
+/* ---------- storage (Claude + standalone) ---------- */
+const KEY='twelfthspace:ledger';
+const CHARGE_KEY='twelfthspace:chargerate';
+let chargeRate=1;   // % fee on money-out, remembered
+const CHARGE_CAP_BANK=10;   // Stanbic: bank transfer (GIP) 1% max GHS 10
+const CHARGE_CAP_MOMO=20;   // Stanbic: to Mobile Money wallet 1% max GHS 20
+const PKEY='twelfthspace:position';
+const VKEY='twelfthspace:seedver';
+const DKEY='twelfthspace:deleted';   // tombstones: ids the user deleted, so a delete survives the cloud merge
+/* ---------- cloud sync (Supabase) ---------- */
+const SB_URL='https://nomaouhyolqttomruylx.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vbWFvdWh5b2xxdHRvbXJ1eWx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNjM2ODQsImV4cCI6MjA5ODczOTY4NH0.Bzz71oUuR1S_OJ0yWQ0V7vKiDaym3EKlKOH0ewG5KV4';
+const SYNC_KEYS=[KEY,VKEY,PKEY,DKEY];
+let sb=null; try{sb=window.supabase.createClient(SB_URL,SB_ANON);}catch(e){}
+let cloudUser=null;       // set once signed in
+let cloudCache=null;      // in-memory mirror of the user's synced blob
+let pushTimer=null, pushPending=false;
+let cloudOK=false, lastSyncErr='';
+const SEED_VERSION='v5-2026-07-03-auto';
+let position={bank:6982.37,momo:2079.95,tbill:5967,loanName:'Jason J. Adu Poku',loanAmount:4000};
+const TBILL=5967;
+let anchorBank=6995.37, anchorMomo=2079.95;   // opening balances; cash = these + your logged entries
+let lastBankFlow=0, lastMomoFlow=0, lastLoanPaid=0;
+const LOAN_NAME='Jason J. Adu Poku', LOAN_AMOUNT=4000;
+const SEED=[{"kind": "expense", "client": "", "project": "", "amount": 399, "method": "Bank", "date": "2026-05-30", "type": "", "total": 0, "subcontractor": "", "description": "Internet data", "category": "Internet Data", "note": "", "id": "seed-1"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2026-05-28", "type": "", "total": 0, "subcontractor": "", "description": "Fuel — to R. Azaglo", "category": "Owner draw", "note": "", "id": "seed-2"}, {"kind": "expense", "client": "", "project": "", "amount": 200, "method": "Bank", "date": "2026-05-25", "type": "", "total": 0, "subcontractor": "", "description": "Fuel / TNT allowance", "category": "Transport", "note": "", "id": "seed-3"}, {"kind": "out", "client": "Smarttys Mgmt & Productions", "project": "Website development", "amount": 1000, "method": "Bank", "date": "2026-05-17", "type": "", "total": 0, "subcontractor": "Anthony Yankey", "description": "", "category": "", "note": "Website sub-contractor (ref 'Website PP')", "id": "seed-4"}, {"kind": "expense", "client": "", "project": "", "amount": 400, "method": "Bank", "date": "2026-05-08", "type": "", "total": 0, "subcontractor": "", "description": "Internet data", "category": "Internet Data", "note": "", "id": "seed-5"}, {"kind": "in", "client": "Smarttys Mgmt & Productions", "project": "Website development", "amount": 5000, "method": "Bank", "date": "2026-05-07", "type": "Deposit", "total": 10000, "subcontractor": "", "description": "", "category": "", "note": "50% deposit; GHS5,000 balance due on completion", "id": "seed-6"}, {"kind": "in", "client": "Teesign Media", "project": "Logo design", "amount": 1011.12, "method": "Bank", "date": "2026-05-07", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "Invoiced ~GHS1,000; received GHS1,011.12 due to USD conversion", "id": "seed-7"}, {"kind": "expense", "client": "", "project": "", "amount": 652.31, "method": "Bank", "date": "2026-05-07", "type": "", "total": 0, "subcontractor": "", "description": "Hostinger hosting/domain (USD 53.89)", "category": "Subscriptions", "note": "", "id": "seed-8"}, {"kind": "expense", "client": "", "project": "", "amount": 700, "method": "Bank", "date": "2026-04-26", "type": "", "total": 0, "subcontractor": "", "description": "Honorarium to R. Azaglo", "category": "Owner draw", "note": "", "id": "seed-9"}, {"kind": "in", "client": "Bubbles Cuisine", "project": "Flyer", "amount": 500, "method": "Bank", "date": "2026-04-15", "type": "Part payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "Part payment; contract later dropped", "id": "seed-10"}, {"kind": "job", "client": "Dennis Boateng", "project": "Ghana Comedy Awards", "amount": 1500, "method": "", "date": "2025-12-31", "type": "", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "Owed — not yet paid (aka Dennis Nana Boateng / Ayewaa)", "id": "seed-11"}, {"kind": "job", "client": "Dennis Boateng", "project": "Campus Comedy Experience logo", "amount": 1200, "method": "", "date": "2025-12-31", "type": "", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "Owed — not yet paid", "id": "seed-12"}, {"kind": "job", "client": "Dennis Boateng", "project": "Kwahuman Excellence Awards logo", "amount": 1500, "method": "", "date": "2025-12-31", "type": "", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "Owed — not yet paid", "id": "seed-13"}, {"kind": "in", "client": "Regal Film Festival", "project": "A6 envelopes, seals, 3D print (TS/0047)", "amount": 435, "method": "Bank", "date": "2025-12-09", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-14"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 380, "method": "Bank", "date": "2025-12-09", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0047", "id": "seed-15"}, {"kind": "in", "client": "Regal Film Festival", "project": "Dummy car key (TS/0045)", "amount": 250, "method": "Bank", "date": "2025-12-08", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-16"}, {"kind": "in", "client": "Regal Film Festival", "project": "Winner card & dummy car-key illustration (TS/0046)", "amount": 550, "method": "Bank", "date": "2025-12-08", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-17"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 180, "method": "Bank", "date": "2025-12-08", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0045", "id": "seed-18"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 165.3, "method": "Bank", "date": "2025-12-08", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0046", "id": "seed-19"}, {"kind": "in", "client": "Regal Film Festival", "project": "Final IC print 300@23, 1.5% disc (TS/0042)", "amount": 6796.5, "method": "Bank", "date": "2025-12-03", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-20"}, {"kind": "in", "client": "Regal Film Festival", "project": "A5 large envelopes 200 (TS/0043)", "amount": 850, "method": "Bank", "date": "2025-12-03", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-21"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 5820, "method": "Bank", "date": "2025-12-03", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0042", "id": "seed-22"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 650, "method": "Bank", "date": "2025-12-03", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0043", "id": "seed-23"}, {"kind": "in", "client": "Regal Film Festival", "project": "REFFA print 63@31 (TS/0041)", "amount": 1953, "method": "Bank", "date": "2025-12-02", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-24"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 1396.8, "method": "Bank", "date": "2025-12-02", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0041", "id": "seed-25"}, {"kind": "in", "client": "Regal Film Festival", "project": "A5 large envelopes + delivery (TS/0040)", "amount": 2370, "method": "Bank", "date": "2025-12-01", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-26"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 1870, "method": "Bank", "date": "2025-12-01", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0040", "id": "seed-27"}, {"kind": "in", "client": "Regal Film Festival", "project": "Final invitation-card print 300@23 (TS/0039)", "amount": 6900, "method": "Bank", "date": "2025-11-28", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-28"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 6000, "method": "Bank", "date": "2025-11-28", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0039", "id": "seed-29"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 500, "method": "Bank", "date": "2025-11-22", "type": "", "total": 0, "subcontractor": "George Attipoe", "description": "", "category": "", "note": "Regal sub-contractor (paid in full)", "id": "seed-30"}, {"kind": "in", "client": "Regal Film Festival", "project": "Invitation card, billboard, dummy cheque (TS/0038)", "amount": 3450, "method": "Bank", "date": "2025-11-15", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-31"}, {"kind": "out", "client": "Regal Film Festival", "project": "Regal print jobs", "amount": 605, "method": "Bank", "date": "2025-11-15", "type": "", "total": 0, "subcontractor": "Lema Press / Lematek (print house)", "description": "", "category": "", "note": "Print cost TS/0038", "id": "seed-32"}, {"kind": "expense", "client": "", "project": "", "amount": 400, "method": "Bank", "date": "2025-11-13", "type": "", "total": 0, "subcontractor": "", "description": "Internet data", "category": "Internet Data", "note": "", "id": "seed-33"}, {"kind": "expense", "client": "", "project": "", "amount": 90, "method": "Bank", "date": "2025-11-11", "type": "", "total": 0, "subcontractor": "", "description": "Transport (Bolt + Trotro)", "category": "Transport", "note": "", "id": "seed-34"}, {"kind": "in", "client": "Wedding client", "project": "Wedding itinerary", "amount": 350, "method": "Bank", "date": "2025-11-07", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-35"}, {"kind": "out", "client": "Twelfth Space (internal)", "project": "Twelfth Dev", "amount": 500, "method": "Bank", "date": "2025-09-22", "type": "", "total": 0, "subcontractor": "Anthony Yankey", "description": "", "category": "", "note": "Subcontractor — internal dev (ref Twelfth Dev)", "id": "seed-36"}, {"kind": "out", "client": "Twelfth Space (internal)", "project": "Bookmarks (print job)", "amount": 121.9, "method": "Bank", "date": "2025-09-09", "type": "", "total": 0, "subcontractor": "Nicholas Adjei", "description": "", "category": "", "note": "Print cost — bookmarks", "id": "seed-37"}, {"kind": "expense", "client": "", "project": "", "amount": 400, "method": "Bank", "date": "2025-08-04", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-38"}, {"kind": "expense", "client": "", "project": "", "amount": 327.54, "method": "Bank", "date": "2025-08-04", "type": "", "total": 0, "subcontractor": "", "description": "Bank / MoMo Charges", "category": "Other", "note": "", "id": "seed-39"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2025-07-23", "type": "", "total": 0, "subcontractor": "", "description": "Team Meeting Expenses", "category": "Other", "note": "", "id": "seed-40"}, {"kind": "expense", "client": "", "project": "", "amount": 4500, "method": "Bank", "date": "2025-06-07", "type": "", "total": 0, "subcontractor": "", "description": "MacBook Screen", "category": "Asset", "note": "", "id": "seed-41"}, {"kind": "expense", "client": "", "project": "", "amount": 4200, "method": "Bank", "date": "2025-06-03", "type": "", "total": 0, "subcontractor": "", "description": "Purchase of Laptop (Backup)", "category": "Asset", "note": "", "id": "seed-42"}, {"kind": "expense", "client": "", "project": "", "amount": 350, "method": "Bank", "date": "2025-05-13", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-43"}, {"kind": "expense", "client": "", "project": "", "amount": 2700, "method": "Bank", "date": "2025-04-19", "type": "", "total": 0, "subcontractor": "", "description": "Allowance and Data Bundle for Team", "category": "Other", "note": "", "id": "seed-44"}, {"kind": "expense", "client": "", "project": "", "amount": 560, "method": "Bank", "date": "2025-03-26", "type": "", "total": 0, "subcontractor": "", "description": "Printing for Client's Work", "category": "Design & Printing", "note": "", "id": "seed-45"}, {"kind": "in", "client": "Shepherd Xorman", "project": "Brand Development", "amount": 13862.5, "method": "Bank", "date": "2025-03-25", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-46"}, {"kind": "expense", "client": "", "project": "", "amount": 850, "method": "Bank", "date": "2025-03-18", "type": "", "total": 0, "subcontractor": "", "description": "Animation Video for Twelfth Space", "category": "Design & Printing", "note": "", "id": "seed-47"}, {"kind": "expense", "client": "", "project": "", "amount": 663.96, "method": "Bank", "date": "2025-03-17", "type": "", "total": 0, "subcontractor": "", "description": "Domain Subscription (USD 39.51)", "category": "Subscriptions", "note": "", "id": "seed-48"}, {"kind": "expense", "client": "", "project": "", "amount": 350, "method": "Bank", "date": "2025-03-15", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-49"}, {"kind": "in", "client": "Stephen Dadzie", "project": "Flyer and Mini Logo", "amount": 500, "method": "Bank", "date": "2025-03-10", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-50"}, {"kind": "in", "client": "Kaymaud Clothing", "project": "Business Card Design & Print", "amount": 300, "method": "Bank", "date": "2025-03-06", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-51"}, {"kind": "expense", "client": "", "project": "", "amount": 300, "method": "Bank", "date": "2025-03-06", "type": "", "total": 0, "subcontractor": "", "description": "Printing Expenses", "category": "Other", "note": "", "id": "seed-52"}, {"kind": "in", "client": "Terami Catering Services", "project": "Flyer", "amount": 150, "method": "Bank", "date": "2025-01-27", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-53"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2025-01-24", "type": "", "total": 0, "subcontractor": "", "description": "Purchase of Charger", "category": "Other", "note": "", "id": "seed-54"}, {"kind": "in", "client": "Rabs Royal", "project": "Visual Identity", "amount": 2700, "method": "Bank", "date": "2025-01-22", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-55"}, {"kind": "expense", "client": "", "project": "", "amount": 52, "method": "Bank", "date": "2025-01-19", "type": "", "total": 0, "subcontractor": "", "description": "Internet Data Bundle", "category": "Internet Data", "note": "", "id": "seed-56"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2025-01-18", "type": "", "total": 0, "subcontractor": "", "description": "Allowance for Team", "category": "Other", "note": "", "id": "seed-57"}, {"kind": "in", "client": "Anthony", "project": "Brand Development", "amount": 1100, "method": "Bank", "date": "2024-12-23", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-58"}, {"kind": "expense", "client": "", "project": "", "amount": 325, "method": "Bank", "date": "2024-12-23", "type": "", "total": 0, "subcontractor": "", "description": "Router", "category": "Other", "note": "", "id": "seed-59"}, {"kind": "expense", "client": "", "project": "", "amount": 50, "method": "Bank", "date": "2024-12-13", "type": "", "total": 0, "subcontractor": "", "description": "Delivery for Router", "category": "Delivery", "note": "", "id": "seed-60"}, {"kind": "in", "client": "Dennis Boateng", "project": "Brand Development", "amount": 3000, "method": "Bank", "date": "2024-12-08", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-61"}, {"kind": "in", "client": "Kafui", "project": "Social Media Management", "amount": 1500, "method": "Bank", "date": "2024-11-30", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-62"}, {"kind": "expense", "client": "", "project": "", "amount": 100, "method": "Bank", "date": "2024-11-23", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-63"}, {"kind": "expense", "client": "", "project": "", "amount": 300, "method": "Bank", "date": "2024-11-22", "type": "", "total": 0, "subcontractor": "", "description": "Miscellaneous Expenses", "category": "Other", "note": "", "id": "seed-64"}, {"kind": "in", "client": "Matthew", "project": "Social Media Management", "amount": 1000, "method": "Bank", "date": "2024-10-31", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-65"}, {"kind": "expense", "client": "", "project": "", "amount": 60, "method": "Bank", "date": "2024-10-31", "type": "", "total": 0, "subcontractor": "", "description": "Delivery of Company Cert", "category": "Delivery", "note": "", "id": "seed-66"}, {"kind": "expense", "client": "", "project": "", "amount": 100, "method": "Bank", "date": "2024-10-20", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-67"}, {"kind": "in", "client": "Dennis Boateng", "project": "Brand Development", "amount": 450, "method": "Bank", "date": "2024-10-02", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-68"}, {"kind": "expense", "client": "", "project": "", "amount": 150, "method": "Bank", "date": "2024-09-30", "type": "", "total": 0, "subcontractor": "", "description": "Freepik Subscription", "category": "Subscriptions", "note": "", "id": "seed-69"}, {"kind": "in", "client": "Kafui", "project": "Social Media Management", "amount": 200, "method": "Bank", "date": "2024-09-17", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-70"}, {"kind": "expense", "client": "", "project": "", "amount": 300, "method": "Bank", "date": "2024-09-09", "type": "", "total": 0, "subcontractor": "", "description": "Company Registration", "category": "Other", "note": "", "id": "seed-71"}, {"kind": "in", "client": "Dennis Boateng", "project": "Brand Development", "amount": 1000, "method": "Bank", "date": "2024-09-06", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-72"}, {"kind": "in", "client": "Anthony", "project": "Social Media Management", "amount": 500, "method": "Bank", "date": "2024-08-27", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-73"}, {"kind": "in", "client": "Kafui", "project": "Brand Development & Social Media Mgmt", "amount": 900, "method": "Bank", "date": "2024-08-21", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-74"}, {"kind": "in", "client": "Kafui", "project": "Social Media Management", "amount": 400, "method": "Bank", "date": "2024-08-06", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-75"}, {"kind": "expense", "client": "", "project": "", "amount": 150, "method": "Bank", "date": "2024-07-27", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-76"}, {"kind": "expense", "client": "", "project": "", "amount": 200, "method": "Bank", "date": "2024-07-26", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-77"}, {"kind": "expense", "client": "", "project": "", "amount": 230, "method": "Bank", "date": "2024-07-23", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-78"}, {"kind": "expense", "client": "", "project": "", "amount": 200, "method": "Bank", "date": "2024-07-19", "type": "", "total": 0, "subcontractor": "", "description": "Utility", "category": "Other", "note": "", "id": "seed-79"}, {"kind": "expense", "client": "", "project": "", "amount": 200, "method": "Bank", "date": "2024-07-04", "type": "", "total": 0, "subcontractor": "", "description": "Internet Data", "category": "Internet Data", "note": "", "id": "seed-80"}, {"kind": "expense", "client": "", "project": "", "amount": 100, "method": "Bank", "date": "2024-07-04", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-81"}, {"kind": "in", "client": "Dennis Boateng", "project": "Social Media Management", "amount": 1000, "method": "Bank", "date": "2024-07-03", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-82"}, {"kind": "in", "client": "Anthony", "project": "Brand Development", "amount": 500, "method": "Bank", "date": "2024-06-20", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-83"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2024-06-19", "type": "", "total": 0, "subcontractor": "", "description": "Internet Bundle", "category": "Internet Data", "note": "", "id": "seed-84"}, {"kind": "in", "client": "Senyo", "project": "Social Media Management", "amount": 250, "method": "Bank", "date": "2024-06-10", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-85"}, {"kind": "in", "client": "Jabare", "project": "Brand Development", "amount": 500, "method": "Bank", "date": "2024-06-03", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-86"}, {"kind": "in", "client": "John Opare", "project": "Social Media Management", "amount": 200, "method": "Bank", "date": "2024-06-01", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-87"}, {"kind": "expense", "client": "", "project": "", "amount": 500, "method": "Bank", "date": "2024-05-23", "type": "", "total": 0, "subcontractor": "", "description": "Laptop Bag and Converter", "category": "Other", "note": "", "id": "seed-88"}, {"kind": "in", "client": "Dennis Boateng", "project": "Brand Development", "amount": 400, "method": "Bank", "date": "2024-05-22", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-89"}, {"kind": "expense", "client": "", "project": "", "amount": 8500, "method": "Bank", "date": "2024-05-21", "type": "", "total": 0, "subcontractor": "", "description": "Purchase of MacBook", "category": "Asset", "note": "", "id": "seed-90"}, {"kind": "in", "client": "Anthony", "project": "Social Media Management", "amount": 250, "method": "Bank", "date": "2024-05-10", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-91"}, {"kind": "in", "client": "Anthony", "project": "Brand Development", "amount": 2575, "method": "Bank", "date": "2024-05-10", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-92"}, {"kind": "in", "client": "Anthony", "project": "Brand Development", "amount": 600, "method": "Bank", "date": "2024-05-06", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-93"}, {"kind": "in", "client": "Anthony", "project": "Website", "amount": 1100, "method": "Bank", "date": "2024-05-06", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-94"}, {"kind": "in", "client": "Anthony", "project": "Brand Development", "amount": 2075, "method": "Bank", "date": "2024-04-25", "type": "Full payment", "total": 0, "subcontractor": "", "description": "", "category": "", "note": "", "id": "seed-95"}];
+let records=[], editingId=null, activeTab='payments', mode='in';
+let choice={type:'Full payment',method:'Bank'};
+
+async function storeGet(key){
+  if(cloudCache){ if(cloudCache[key]!=null) return cloudCache[key];
+    try{return localStorage.getItem(key);}catch(e){return null;} }
+  try{return localStorage.getItem(key);}catch(e){return null;}
+}
+async function storeSet(key,v){
+  try{localStorage.setItem(key,v);}catch(e){}
+  if(cloudCache){ cloudCache[key]=v; schedulePush(); }
+}
+/* Parse a tombstone blob (array of deleted ids) safely into a Set of strings */
+function parseDeleted(str){const s=new Set();try{(JSON.parse(str)||[]).forEach(id=>{if(id!=null)s.add(String(id));});}catch(e){}return s;}
+/* Union of two tombstone blobs -> JSON array */
+function mergeDeleted(remoteStr,localStr){const s=parseDeleted(remoteStr);parseDeleted(localStr).forEach(id=>s.add(id));return JSON.stringify([...s]);}
+/* Merge two ledger arrays by id — keep every unique record, remote wins on conflicts,
+   but drop anything whose id is in the tombstone set so deletions survive the merge */
+function mergeLedger(remoteStr,localStr,deletedSet){
+  let rem=[],loc=[];
+  try{rem=JSON.parse(remoteStr)||[];}catch(e){}
+  try{loc=JSON.parse(localStr)||[];}catch(e){}
+  const byId={}; loc.forEach(r=>{if(r&&r.id!=null)byId[r.id]=r;}); rem.forEach(r=>{if(r&&r.id!=null)byId[r.id]=r;});
+  const del=deletedSet||new Set();
+  return JSON.stringify(Object.values(byId).filter(r=>!del.has(String(r.id))));
+}
+async function pullRemote(){
+  if(!sb||!cloudUser) return;
+  let row=null;
+  try{
+    const {data,error}=await sb.from('app_state').select('data').eq('user_id',cloudUser.id).maybeSingle();
+    if(error) throw error; row=data;
+  }catch(e){ cloudOK=false; lastSyncErr=(e&&e.message)?e.message:'unreachable'; updateSyncBadge(); return; }
+  const localKEY=(()=>{try{return localStorage.getItem(KEY);}catch(e){return null;}})();
+  const localDEL=(()=>{try{return localStorage.getItem(DKEY);}catch(e){return null;}})();
+  if(row&&row.data){
+    const remote=row.data; const merged=Object.assign({},remote);
+    const mergedDelStr=mergeDeleted(remote[DKEY],localDEL);
+    merged[DKEY]=mergedDelStr;
+    if(remote[KEY]||localKEY){ merged[KEY]=mergeLedger(remote[KEY],localKEY,parseDeleted(mergedDelStr)); }
+    cloudCache=merged;
+    SYNC_KEYS.forEach(k=>{ if(cloudCache[k]!=null){try{localStorage.setItem(k,cloudCache[k]);}catch(e){}} });
+    cloudOK=true; lastSyncErr=''; updateSyncBadge();
+    if(JSON.stringify(merged)!==JSON.stringify(remote)) await pushNow();
+  }else{
+    // First login for this account — seed the cloud from whatever is on this device
+    cloudCache={};
+    SYNC_KEYS.forEach(k=>{ const v=(()=>{try{return localStorage.getItem(k);}catch(e){return null;}})(); if(v!=null)cloudCache[k]=v; });
+    cloudOK=true; lastSyncErr=''; updateSyncBadge();
+    await pushNow();
+  }
+}
+function schedulePush(){ pushPending=true; clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,800); }
+async function pushNow(){
+  clearTimeout(pushTimer); if(!sb||!cloudUser||!cloudCache) return;
+  try{
+    /* Re-read the latest cloud copy FIRST, then merge our changes into it.
+       This stops any other device/tab (holding an older copy) from silently
+       overwriting the cloud and bringing back rows you deleted or duplicating
+       entries. A delete anywhere is permanent (tombstones are unioned). */
+    let remote=null;
+    try{
+      const {data,error}=await sb.from('app_state').select('data').eq('user_id',cloudUser.id).maybeSingle();
+      if(!error && data) remote=data.data;
+    }catch(e){}
+    const local=Object.assign({},cloudCache);
+    const merged=Object.assign({},remote||{},local);
+    const mergedDelStr=mergeDeleted(remote?remote[DKEY]:null, local[DKEY]);
+    merged[DKEY]=mergedDelStr;
+    if((remote&&remote[KEY])||local[KEY]){
+      merged[KEY]=mergeLedger(remote?remote[KEY]:null, local[KEY], parseDeleted(mergedDelStr));
+    }
+    cloudCache=merged;
+    SYNC_KEYS.forEach(k=>{ if(merged[k]!=null){try{localStorage.setItem(k,merged[k]);}catch(e){}} });
+    const snapshot=Object.assign({},merged);
+    const {error}=await sb.from('app_state').upsert({user_id:cloudUser.id,data:snapshot,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+    if(error) throw error; pushPending=false; cloudOK=true; lastSyncErr=''; updateSyncBadge();
+  }catch(e){ cloudOK=false; lastSyncErr=(e&&e.message)?e.message:'unreachable'; updateSyncBadge(); clearTimeout(pushTimer); pushTimer=setTimeout(pushNow,4000); }
+}
+async function load(){
+  const cr=await storeGet(CHARGE_KEY);if(cr!=null){const v=parseFloat(cr);if(!isNaN(v))chargeRate=v;}
+  const ver=await storeGet(VKEY);
+  const raw=await storeGet(KEY);
+  if(raw&&ver===SEED_VERSION){try{records=JSON.parse(raw)||[];}catch(e){records=SEED.slice();}}
+  else{
+    let userRecs=[];
+    if(raw){try{userRecs=(JSON.parse(raw)||[]).filter(r=>String(r.id).indexOf('seed-')!==0);}catch(e){}}
+    records=SEED.slice().concat(userRecs);
+    await storeSet(KEY,JSON.stringify(records));await storeSet(VKEY,SEED_VERSION);
+  }
+  const delSet=parseDeleted(await storeGet(DKEY));
+  if(delSet.size){records=records.filter(r=>!delSet.has(String(r.id)));await storeSet(KEY,JSON.stringify(records));}
+  render();
+}
+async function persist(){await storeSet(KEY,JSON.stringify(records));}
+async function persistPos(){await storeSet(PKEY,JSON.stringify(position));}
+
+/* ---------- helpers ---------- */
+const money=n=>'₵'+Number(n||0).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const moneyShort=n=>'₵'+Number(n||0).toLocaleString('en-GH',{maximumFractionDigits:0});
+const ghs=n=>'GHS '+Number(n||0).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2});
+function niceDate(iso){if(!iso)return'—';const d=new Date(iso+'T00:00:00');return isNaN(d)?iso:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(msg){const t=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+const typeClass={'Full payment':'b-full','Part payment':'b-part','Deposit':'b-dep'};
+const typeDot={'Full payment':'var(--full)','Part payment':'var(--part)','Deposit':'var(--dep)'};
+
+/* ---------- pickers ---------- */
+document.querySelectorAll('.seg').forEach(seg=>{const group=seg.dataset.group;
+  seg.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{seg.querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');choice[group]=btn.dataset.v;if(group==='method'&&typeof updateChargePreview==='function')updateChargePreview();}));});
+function setSeg(group,value){const seg=document.querySelector(`.seg[data-group="${group}"]`);seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===value));choice[group]=value;}
+
+/* ---------- money in/out mode ---------- */
+document.querySelectorAll('#modeSw button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.m)));
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('#modeSw button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  const form=document.getElementById('payForm');
+  form.classList.remove('mode-in','mode-out','mode-job','mode-expense');form.classList.add('mode-'+m);
+  document.getElementById('amountLbl').textContent=(m==='in')?'Amount received':(m==='out')?'Amount paid':(m==='job')?'Invoiced / agreed amount':'Amount spent';
+  document.getElementById('submitLabel').textContent=(m==='in')?'Add payment':(m==='out')?'Add subcontractor payout':(m==='job')?'Add job (owed)':'Add expense';
+  document.getElementById('chargePct').value=chargeRate;updateChargePreview();
+}
+
+document.getElementById('date').value=new Date().toISOString().slice(0,10);
+
+/* ---------- submit ---------- */
+document.getElementById('payForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const client=document.getElementById('client').value.trim();
+  const project=document.getElementById('project').value.trim();
+  const amount=parseFloat(document.getElementById('amount').value)||0;
+  const subname=document.getElementById('subname').value.trim();
+  const desc=document.getElementById('expdesc').value.trim();
+  if(mode==='expense'){if(!desc){toast('Add what the expense was for');return;}}
+  else if(!client||!project){toast('Add a client and project name');return;}
+  if(amount<=0){toast('Enter an amount');return;}
+  if(mode==='out'&&!subname){toast('Add the subcontractor name');return;}
+  const chargePct=(mode==='out'||mode==='expense')?(parseFloat(document.getElementById('chargePct').value)||0):0;
+  const chargeCap=(choice.method==='Mobile money')?CHARGE_CAP_MOMO:CHARGE_CAP_BANK;
+  let charge=(mode==='out'||mode==='expense')?Math.round(amount*chargePct)/100:0;
+  if(charge>chargeCap)charge=chargeCap;
+  const rec={
+    id: editingId || (Date.now()+'-'+Math.random().toString(36).slice(2,7)),
+    kind: mode,
+    client: mode==='expense'?'':client, project: mode==='expense'?'':project, amount,
+    method: mode==='job'?'':choice.method, date: document.getElementById('date').value,
+    type: mode==='in'?choice.type:'', total: mode==='in'?(parseFloat(document.getElementById('total').value)||0):0,
+    subcontractor: mode==='out'?subname:'',
+    description: mode==='expense'?desc:'', category: mode==='expense'?document.getElementById('expcat').value:'',
+    charge: charge, chargePct: chargePct,
+    note: (mode==='out'||mode==='job'||mode==='expense')?document.getElementById('note').value.trim():''
+  };
+  if((mode==='out'||mode==='expense')&&chargePct!==chargeRate){chargeRate=chargePct;storeSet(CHARGE_KEY,String(chargePct));}
+  if(loanPayMode){rec.kind='loanpay';rec.charge=0;rec.chargePct=0;rec.type='';rec.total=0;loanPayMode=false;}
+  if(editingId){records=records.map(r=>r.id===editingId?rec:r);toast('Entry updated');}
+  else{records.unshift(rec);toast(mode==='in'?'Payment added':mode==='out'?'Subcontractor payout added':mode==='job'?'Job added':'Expense added');}
+  resetForm();persist();render(true);document.getElementById('client').focus();
+});
+
+function resetForm(){
+  editingId=null;loanPayMode=false;
+  document.getElementById('payForm').reset();
+  document.getElementById('date').value=new Date().toISOString().slice(0,10);
+  setSeg('type','Full payment');setSeg('method','Bank');setMode('in');
+  document.getElementById('formPanel').classList.remove('editing');
+  document.getElementById('formTitle').textContent='Log an entry';
+  document.getElementById('formHint').textContent='Record money coming in, or money paid out to a subcontractor.';
+}
+
+/* ---------- edit / delete ---------- */
+function edit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;setMode(r.kind==='loanpay'?'in':r.kind);if(r.kind==='loanpay')loanPayMode=true;
+  document.getElementById('client').value=r.client;document.getElementById('project').value=r.project;
+  document.getElementById('amount').value=r.amount;document.getElementById('date').value=r.date;
+  document.getElementById('total').value=r.total||'';document.getElementById('subname').value=r.subcontractor||'';
+  document.getElementById('note').value=r.note||'';
+  document.getElementById('expdesc').value=r.description||'';document.getElementById('expcat').value=r.category||'Other';
+  if(r.kind==='out'||r.kind==='expense')document.getElementById('chargePct').value=(r.chargePct!=null?r.chargePct:chargeRate);updateChargePreview();
+  if(r.kind==='in')setSeg('type',r.type||'Full payment');setSeg('method',r.method||'Bank');
+  document.getElementById('formPanel').classList.add('editing');
+  document.getElementById('formTitle').textContent='Edit entry';
+  document.getElementById('submitLabel').textContent='Save changes';
+  document.getElementById('formPanel').scrollIntoView({behavior:'smooth',block:'nearest'});}
+function del(id){const r=records.find(x=>x.id===id);if(!r)return;
+  const who=r.kind==='out'?r.subcontractor:(r.kind==='expense'?r.description:r.client);
+  if(!confirm(`Delete the ${money(r.amount)} entry for ${who}?`))return;
+  records=records.filter(x=>x.id!==id);addTombstone(id);if(editingId===id)resetForm();persist();render();toast('Entry deleted');}
+/* remember a deleted id (survives the cloud merge and reloads) */
+function addTombstone(id){
+  let arr=[];try{arr=JSON.parse(localStorage.getItem(DKEY)||'[]')||[];}catch(e){}
+  if(!arr.map(String).includes(String(id)))arr.push(id);
+  storeSet(DKEY,JSON.stringify(arr));
+}
+document.getElementById('cancelEdit').addEventListener('click',resetForm);
+
+/* ---------- quick prefill from Projects tab ---------- */
+function recordAgainst(client,project,agreed,balance){
+  resetForm();setMode('in');
+  document.getElementById('client').value=client;document.getElementById('project').value=project;
+  if(agreed>0)document.getElementById('total').value=agreed;
+  if(balance>0)document.getElementById('amount').value=balance.toFixed(2);
+  setSeg('type','Part payment');
+  document.getElementById('formTitle').textContent='Record next client payment';
+  document.getElementById('formHint').textContent='Balance owed is pre-filled — adjust if they paid a different amount.';
+  document.getElementById('formPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('amount').focus();document.getElementById('amount').select();
+}
+let loanPayMode=false;
+function payLoan(remaining){
+  resetForm();setMode('in');loanPayMode=true;
+  document.getElementById('client').value=LOAN_NAME;
+  document.getElementById('project').value='Loan repayment';
+  if(remaining>0)document.getElementById('amount').value=Number(remaining).toFixed(2);
+  setSeg('type','Full payment');setSeg('method','Bank');
+  document.getElementById('formTitle').textContent='Record loan repayment from '+LOAN_NAME;
+  document.getElementById('formHint').textContent='Money '+LOAN_NAME+' pays back \u2014 reduces the loan and adds to your cash.';
+  document.getElementById('formPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('amount').focus();document.getElementById('amount').select();
+}
+function paySub(client,project){
+  resetForm();setMode('out');
+  document.getElementById('client').value=client;document.getElementById('project').value=project;
+  document.getElementById('formTitle').textContent='Pay a subcontractor';
+  document.getElementById('formHint').textContent='Recording money going out of this project.';
+  document.getElementById('formPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('subname').focus();
+}
+
+/* ---------- yearly summary ---------- */
+function renderYearly(){
+  const empty=document.getElementById('empty');
+  const byY={};
+  records.forEach(r=>{const y=(r.date||'').slice(0,4);if(!/^\d{4}$/.test(y))return;
+    if(!byY[y])byY[y]={year:y,received:0,subs:0,exp:0,n:0};
+    const g=byY[y];g.n++;
+    if(r.kind==='in')g.received+=r.amount;else if(r.kind==='out'){g.subs+=r.amount;g.exp+=(r.charge||0);}else if(r.kind==='expense')g.exp+=r.amount+(r.charge||0);});
+  const years=Object.values(byY).map(g=>Object.assign(g,{net:g.received-g.subs-g.exp}));
+  if(years.length===0){empty.style.display='block';empty.querySelector('.em-ic').textContent='\u{1F4C5}';
+    empty.querySelector('h3').textContent='No dated entries yet';
+    empty.querySelector('p').textContent='Once you log payments, a year-by-year breakdown appears here.';return;}
+  empty.style.display='none';
+  years.sort((a,b)=>b.year.localeCompare(a.year));
+  const best=years.reduce((m,g)=>g.net>m.net?g:m,years[0]);
+  const bestEl=document.getElementById('bestYear');
+  bestEl.style.display='';
+  bestEl.innerHTML=`<span class="by-ic">\u{1F3C6}</span><div><div class="by-t">Best year: ${best.year}</div><div class="by-s">${money(best.net)} net profit \u00B7 ${money(best.received)} received across ${best.n} entries</div></div>`;
+  const rows=document.getElementById('rowsYear');
+  let tr=0,ts=0,te=0,tn=0;
+  years.forEach(g=>{tr+=g.received;ts+=g.subs;te+=g.exp;tn+=g.n;
+    const isBest=g.year===best.year;
+    const row=document.createElement('tr');if(isBest)row.className='best-row';
+    row.innerHTML=`<td><div class="cli">${g.year}${isBest?' <span class="badge b-ok">Best \u{1F3C6}</span>':''}</div></td>
+      <td class="r amt in">${money(g.received)}</td>
+      <td class="r amt out">${g.subs>0?'\u2212'+money(g.subs):'<span class="date">\u2014</span>'}</td>
+      <td class="r amt out">${g.exp>0?'\u2212'+money(g.exp):'<span class="date">\u2014</span>'}</td>
+      <td class="r ${g.net>=0?'net-amt':'owe-amt'}">${money(g.net)}</td>
+      <td class="r date">${g.n}</td>`;
+    rows.appendChild(row);});
+  document.getElementById('footYear').style.display='';
+  document.getElementById('footYearRec').textContent=money(tr);
+  document.getElementById('footYearSub').textContent=ts>0?'\u2212'+money(ts):'\u2014';
+  document.getElementById('footYearExp').textContent=te>0?'\u2212'+money(te):'\u2014';
+  document.getElementById('footYearNet').textContent=money(tr-ts-te);
+  document.getElementById('footYearN').textContent=tn;
+}
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');activeTab=t.dataset.tab;
+  document.getElementById('paymentsView').classList.toggle('hidden',activeTab!=='payments');
+  document.getElementById('owedView').classList.toggle('hidden',activeTab!=='owed');
+  document.getElementById('subsView').classList.toggle('hidden',activeTab!=='subs');
+  document.getElementById('projectsView').classList.toggle('hidden',activeTab!=='projects');
+  document.getElementById('expensesView').classList.toggle('hidden',activeTab!=='expenses');
+  document.getElementById('yearlyView').classList.toggle('hidden',activeTab!=='yearly');
+  document.querySelectorAll('.payonly').forEach(el=>el.classList.toggle('hidden',activeTab!=='payments'));
+  render();
+}));
+['search','fMethod'].forEach(id=>document.getElementById(id).addEventListener('input',()=>render()));
+
+/* ---------- group by project ---------- */
+function groupProjects(){
+  const map=new Map();
+  records.forEach(r=>{
+    const key=(r.client.trim().toLowerCase())+'||'+(r.project.trim().toLowerCase());
+    if(!map.has(key))map.set(key,{client:r.client,project:r.project,received:0,subs:0,agreed:0,agreedSet:false,nIn:0,nOut:0,jobId:null});
+    const g=map.get(key);
+    if(r.kind==='in'){g.received+=r.amount;g.nIn++;if((r.total||0)>0&&!g.agreedSet){g.agreed=r.total;g.agreedSet=true;}}
+    else if(r.kind==='out'){g.subs+=r.amount;g.nOut++;}
+    else if(r.kind==='job'){if(!g.jobId)g.jobId=r.id;if(!g.agreedSet){g.agreed=r.amount;g.agreedSet=true;}}
+  });
+  return [...map.values()];
+}
+
+/* ---------- render ---------- */
+function render(flash){
+  records.sort((a,b)=>{const d=(b.date||'').localeCompare(a.date||'');return d!==0?d:(b.id>a.id?1:-1);});
+  const ins=records.filter(r=>r.kind==='in'), outs=records.filter(r=>r.kind==='out'), exps=records.filter(r=>r.kind==='expense');
+  const totalIn=ins.reduce((s,r)=>s+r.amount,0), totalOut=outs.reduce((s,r)=>s+r.amount,0), totalExp=exps.reduce((s,r)=>s+r.amount,0);
+  const clients=new Set(ins.map(r=>r.client.trim().toLowerCase()).filter(Boolean)).size;
+  const groups=groupProjects();
+  let owed=0,oweN=0;groups.forEach(g=>{if(g.agreedSet){const b=g.agreed-g.received;if(b>0.005){owed+=b;oweN++;}}});
+
+  document.getElementById('sRec').textContent=money(totalIn);
+  document.getElementById('sClients').textContent=clients;
+  document.getElementById('sInN').textContent=ins.length;
+  const totalCharge=records.filter(r=>r.kind==='out'||r.kind==='expense').reduce((s,r)=>s+(r.charge||0),0);
+  document.getElementById('sSub').textContent=money(totalOut);
+  document.getElementById('sOutN').textContent=outs.length;
+  document.getElementById('sExp').textContent=money(totalExp);
+  document.getElementById('sExpN').textContent=exps.length;
+  document.getElementById('sNet').textContent=money(totalIn-totalOut-totalExp-totalCharge);
+  document.getElementById('sNetSub').textContent=totalCharge>0?('after subs, expenses & '+money(totalCharge)+' fees'):'after subs & expenses';
+  document.getElementById('sOwed').textContent=money(owed);
+  document.getElementById('sOweN').textContent=oweN;
+  refreshPosition();renderHealth();updateSuggestions();updateLogReminder();
+
+  const tFull=ins.filter(r=>r.type==='Full payment').reduce((s,r)=>s+r.amount,0);
+  const tPart=ins.filter(r=>r.type==='Part payment').reduce((s,r)=>s+r.amount,0);
+  const tDep=ins.filter(r=>r.type==='Deposit').reduce((s,r)=>s+r.amount,0);
+  const sum=tFull+tPart+tDep||1;
+  document.getElementById('mFull').style.width=(tFull/sum*100)+'%';
+  document.getElementById('mPart').style.width=(tPart/sum*100)+'%';
+  document.getElementById('mDep').style.width=(tDep/sum*100)+'%';
+  document.getElementById('lFull').textContent=moneyShort(tFull);
+  document.getElementById('lPart').textContent=moneyShort(tPart);
+  document.getElementById('lDep').textContent=moneyShort(tDep);
+
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  const empty=document.getElementById('empty');
+  ['rowsIn','rowsOut','rowsProj','rowsOwed','rowsYear'].forEach(id=>document.getElementById(id).innerHTML='');
+  document.getElementById('footIn').style.display='none';document.getElementById('footOut').style.display='none';document.getElementById('footOwed').style.display='none';document.getElementById('footYear').style.display='none';document.getElementById('bestYear').style.display='none';
+
+  if(records.length===0){empty.style.display='block';empty.querySelector('.em-ic').textContent='🛰️';
+    empty.querySelector('h3').textContent='Nothing logged yet';
+    empty.querySelector('p').textContent='Add your first client payment on the left and it will appear right here.';return;}
+
+  if(activeTab==='payments')renderIn(q,flash);
+  else if(activeTab==='owed')renderOwed(q);
+  else if(activeTab==='subs')renderOut(q);
+  else if(activeTab==='projects')renderProjects(q);
+  else if(activeTab==='yearly')renderYearly();
+  else renderExpenses(q);
+}
+
+function noMatch(){const empty=document.getElementById('empty');empty.style.display='block';empty.querySelector('.em-ic').textContent='🔍';
+  empty.querySelector('h3').textContent='No matches';empty.querySelector('p').textContent='Try clearing the search or filters above.';}
+
+function renderIn(q,flash){
+  const fm=document.getElementById('fMethod').value;
+  const list=records.filter(r=>r.kind==='in'||r.kind==='loanpay').filter(r=>{
+    if(fm&&r.method!==fm)return false;
+    if(q&&!(r.client.toLowerCase().includes(q)||r.project.toLowerCase().includes(q)))return false;return true;});
+  const rows=document.getElementById('rowsIn'),empty=document.getElementById('empty'),foot=document.getElementById('footIn');
+  if(list.length===0){noMatch();return;}empty.style.display='none';
+  list.forEach((r,i)=>{const tr=document.createElement('tr');if(flash&&i===0&&!editingId)tr.className='rowin';
+    const typeCell=r.kind==='loanpay'?'<span class="badge b-na">Loan repaid</span>':`<span class="badge ${typeClass[r.type]||'b-full'}"><span class="dot" style="background:${typeDot[r.type]||'var(--full)'}"></span>${(r.type||'Full payment').replace(' payment','')}</span>`;
+    tr.innerHTML=`<td><div class="cli">${esc(r.client)}</div><div class="prj">${esc(r.project)}</div></td>
+      <td class="r amt in">${money(r.amount)}</td>
+      <td>${typeCell}</td>
+      <td><span class="badge ${r.method==='Bank'?'b-bank':'b-mob'}">${r.method}</span></td>
+      <td class="date">${niceDate(r.date)}</td>
+      <td class="r"><div class="rowbtns">
+        <button class="icob" title="Edit" onclick="edit('${r.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></button>
+        <button class="icob del" title="Delete" onclick="del('${r.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div></td>`;
+    rows.appendChild(tr);});
+  const shown=list.filter(r=>r.kind==='in').reduce((s,r)=>s+r.amount,0);foot.style.display='';document.getElementById('footInTotal').textContent=money(shown);
+  foot.querySelector('td').textContent='Grand total received';
+}
+
+function renderOwed(q){
+  const rows=document.getElementById('rowsOwed'),empty=document.getElementById('empty'),foot=document.getElementById('footOwed');
+  const groups=groupProjects();
+  let items=[];
+  groups.forEach(g=>{if(!g.agreedSet)return;const bal=g.agreed-g.received;
+    if(bal>0.005)items.push({client:g.client,project:g.project,agreed:g.agreed,amount:bal,jobId:g.jobId,status:(g.received>0.005?'Part-paid':'Owed job')});});
+  const loanLeft=Math.max(LOAN_AMOUNT-records.filter(r=>r.kind==='loanpay').reduce((s,r)=>s+r.amount,0),0);
+  if(loanLeft>0.005)items.push({client:LOAN_NAME,project:'',amount:loanLeft,isLoan:true,status:'Loan'});
+  const grandTotal=items.reduce((s,it)=>s+it.amount,0);
+  let view=items.slice();
+  if(q)view=view.filter(it=>it.client.toLowerCase().includes(q)||(it.project||'').toLowerCase().includes(q));
+  if(items.length===0){empty.style.display='block';empty.querySelector('.em-ic').textContent='\u{1F4CC}';
+    empty.querySelector('h3').textContent='Nothing owed to you';
+    empty.querySelector('p').textContent='When a client owes money or a job is unpaid, it shows here with its remaining balance.';foot.style.display='none';return;}
+  if(view.length===0){noMatch();foot.style.display='none';return;}
+  empty.style.display='none';
+  view.sort((a,b)=>b.amount-a.amount);
+  const dSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  view.forEach(it=>{const tr=document.createElement('tr');
+    const badge=it.isLoan?'<span class="badge b-na">Loan</span>':(it.status==='Part-paid'?'<span class="badge b-part">Part-paid</span>':'<span class="badge b-owe">Owed job</span>');
+    let actions='<span class="date">\u2014</span>';
+    if(it.isLoan){
+      actions=`<div class="acts"><button class="recbtn" onclick="payLoan(${it.amount})">Payment</button></div>`;
+    }else{
+      const pay=`<button class="recbtn" onclick="recordAgainst('${esc(it.client)}','${esc(it.project)}',${it.agreed||0},${it.amount})">Payment</button>`;
+      const del=it.jobId?`<button class="icob del" title="Delete owed job" onclick="del('${it.jobId}')">${dSvg}</button>`:'';
+      actions=`<div class="acts">${pay}${del}</div>`;
+    }
+    tr.innerHTML=`<td><div class="cli">${esc(it.client)}</div>${it.project?`<div class="prj">${esc(it.project)}</div>`:''}</td>
+      <td class="r"><span class="owe-amt">${money(it.amount)}</span></td>
+      <td>${badge}</td>
+      <td class="r">${actions}</td>`;
+    rows.appendChild(tr);});
+  foot.style.display='';
+  document.getElementById('footOwedTotal').textContent=money(grandTotal);
+  foot.querySelector('td').textContent=(view.length===items.length)?'Total owed to you':`Showing ${view.length} of ${items.length}`;
+}
+
+function renderOut(q){
+  const list=records.filter(r=>r.kind==='out').filter(r=>{
+    if(q&&!(r.subcontractor.toLowerCase().includes(q)||r.client.toLowerCase().includes(q)||r.project.toLowerCase().includes(q)))return false;return true;});
+  const rows=document.getElementById('rowsOut'),empty=document.getElementById('empty'),foot=document.getElementById('footOut');
+  if(list.length===0){if(records.filter(r=>r.kind==='out').length===0){empty.style.display='block';empty.querySelector('.em-ic').textContent='🤝';
+      empty.querySelector('h3').textContent='No subcontractor payouts yet';
+      empty.querySelector('p').textContent='Switch the form to “Money out · subcontractor” to record one.';}else noMatch();return;}
+  empty.style.display='none';
+  list.forEach(r=>{const tr=document.createElement('tr');
+    tr.innerHTML=`<td><div class="cli">${esc(r.subcontractor)}</div>${r.note?`<div class="prj">${esc(r.note)}</div>`:''}</td>
+      <td><div class="cli" style="font-weight:500">${esc(r.client)}</div><div class="prj">${esc(r.project)}</div></td>
+      <td class="r amt out">−${money(r.amount)}${r.charge>0?'<div class="fee-note">+'+money(r.charge)+' fee</div>':''}</td>
+      <td><span class="badge ${r.method==='Bank'?'b-bank':'b-mob'}">${r.method}</span></td>
+      <td class="date">${niceDate(r.date)}</td>
+      <td class="r"><div class="rowbtns">
+        <button class="icob" title="Edit" onclick="edit('${r.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></button>
+        <button class="icob del" title="Delete" onclick="del('${r.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div></td>`;rows.appendChild(tr);});
+  const shown=list.reduce((s,r)=>s+r.amount,0);foot.style.display='';document.getElementById('footOutTotal').textContent=money(shown);
+}
+
+function renderProjects(q){
+  let groups=groupProjects();
+  if(q)groups=groups.filter(g=>g.client.toLowerCase().includes(q)||g.project.toLowerCase().includes(q));
+  groups.sort((a,b)=>{const ba=a.agreedSet?a.agreed-a.received:-1,bb=b.agreedSet?b.agreed-b.received:-1;return bb-ba;});
+  const rows=document.getElementById('rowsProj'),empty=document.getElementById('empty');
+  if(groups.length===0){noMatch();return;}empty.style.display='none';
+  groups.forEach(g=>{
+    const net=g.received-g.subs, bal=g.agreed-g.received;
+    let balCell,statusAction;
+    if(!g.agreedSet){balCell=`<span class="date">no total set</span>`;
+      statusAction=`<button class="recbtn" onclick="recordAgainst('${esc(g.client)}','${esc(g.project)}',0,0)">Payment</button>`;}
+    else if(bal>0.005){balCell=`<span class="owe-amt">${money(bal)}</span>`;
+      statusAction=`<button class="recbtn" onclick="recordAgainst('${esc(g.client)}','${esc(g.project)}',${g.agreed},${bal})">Payment</button>`;}
+    else{balCell=`<span class="badge b-ok">Settled ✓</span>`;statusAction='';}
+    const subLine=g.agreedSet?`total ${moneyShort(g.agreed)} · ${g.nIn} in · ${g.nOut} sub`:`${g.nIn} in · ${g.nOut} sub`;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><div class="cli">${esc(g.client)}</div><div class="prj">${esc(g.project)} · ${subLine}</div></td>
+      <td class="r amt in">${money(g.received)}</td>
+      <td class="r amt out">${g.subs>0?'−'+money(g.subs):'<span class="date">—</span>'}</td>
+      <td class="r net-amt">${money(net)}</td>
+      <td class="r">${balCell}</td>
+      <td class="r"><div class="acts">${statusAction}<button class="subbtn" onclick="paySub('${esc(g.client)}','${esc(g.project)}')">+ Sub</button></div></td>`;
+    rows.appendChild(tr);
+  });
+}
+
+function renderExpenses(q){
+  const list=records.filter(r=>r.kind==='expense').filter(r=>{
+    if(q&&!((r.description||'').toLowerCase().includes(q)||(r.category||'').toLowerCase().includes(q)))return false;return true;});
+  const rows=document.getElementById('rowsExp'),empty=document.getElementById('empty'),foot=document.getElementById('footExp');
+  rows.innerHTML='';
+  if(list.length===0){if(records.filter(r=>r.kind==='expense').length===0){empty.style.display='block';empty.querySelector('.em-ic').textContent='\u{1F9FE}';
+      empty.querySelector('h3').textContent='No expenses yet';empty.querySelector('p').textContent='Switch the form to \u201CExpense\u201D to record overheads like data, transport or subscriptions.';}else noMatch();foot.style.display='none';return;}
+  empty.style.display='none';
+  const eSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>';
+  const dSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  list.forEach(r=>{const tr=document.createElement('tr');
+    tr.innerHTML=`<td><div class="cli">${esc(r.description||'\u2014')}</div>${r.note?`<div class="prj">${esc(r.note)}</div>`:''}</td>
+      <td><span class="badge b-na">${esc(r.category||'Other')}</span></td>
+      <td class="r amt out">\u2212${money(r.amount)}${r.charge>0?'<div class="fee-note">+'+money(r.charge)+' fee</div>':''}</td>
+      <td>${r.method?`<span class="badge ${r.method==='Bank'?'b-bank':'b-mob'}">${r.method}</span>`:'<span class="date">\u2014</span>'}</td>
+      <td class="date">${niceDate(r.date)}</td>
+      <td class="r"><div class="rowbtns"><button class="icob" title="Edit" onclick="edit('${r.id}')">${eSvg}</button><button class="icob del" title="Delete" onclick="del('${r.id}')">${dSvg}</button></div></td>`;
+    rows.appendChild(tr);});
+  const shown=list.reduce((s,r)=>s+r.amount,0);foot.style.display='';document.getElementById('footExpTotal').textContent=money(shown);
+}
+function renderHealth(){
+  const ins=records.filter(r=>r.kind==='in'),outs=records.filter(r=>r.kind==='out'),exps=records.filter(r=>r.kind==='expense');
+  const ti=ins.reduce((s,r)=>s+r.amount,0),to=outs.reduce((s,r)=>s+r.amount,0),te=exps.reduce((s,r)=>s+r.amount,0);
+  const profit=ti-to-te, margin=ti>0?profit/ti:0;
+  const cash=position?((position.bank||0)+(position.momo||0)):0;
+  const groups=groupProjects();let owed=0;groups.forEach(g=>{if(g.agreedSet){const b=g.agreed-g.received;if(b>0.005)owed+=b;}});
+  const owedTot=owed+(position?(position.loanAmount||0):0);
+  const reasons=[];
+  reasons.push(profit>0?`profitable overall (${money(profit)} kept)`:`spending more than you\u2019ve earned (${money(profit)})`);
+  reasons.push(cash>0?'positive cash on hand':'no cash cushion');
+  reasons.push(margin>=0.15?`a solid ${Math.round(margin*100)}% profit margin`:margin>0?`a thin ${Math.round(margin*100)}% margin`:'a negative margin');
+  let level,emoji,title;
+  if(profit>0&&cash>0&&margin>=0.15){level='good';emoji='\u{1F49A}';title='Financially healthy';}
+  else if(profit<=0||cash<=0){level='bad';emoji='\u26A0\uFE0F';title='Needs attention';}
+  else{level='ok';emoji='\u{1F7E1}';title='Stable \u2014 watch it';}
+  let msg='You have '+reasons.join(', ')+'.';
+  if(owedTot>0)msg+=` ${money(owedTot)} is owed to you \u2014 collecting it lifts your cash.`;
+  const CASH_BENCHMARK=20000;                               // startup safety mark
+  if(cash<CASH_BENCHMARK){
+    level='bad';emoji='\u26A0\uFE0F';title='Cash is low \u2014 below your '+money(CASH_BENCHMARK)+' mark';
+    msg='Heads up: your cash on hand is '+money(cash)+', under your '+money(CASH_BENCHMARK)+' startup safety benchmark. '
+      +(profit>0?('You\u2019re profitable ('+money(profit)+' kept), but keep spending tight and build reserves'):('You\u2019re also running at a loss ('+money(profit)+') \u2014 tighten spending'))
+      +(owedTot>0?(' \u2014 collecting the '+money(owedTot)+' owed to you would help.'):'.');
+  }
+  const card=document.getElementById('healthCard');card.classList.remove('good','ok','bad');card.classList.add(level);
+  document.getElementById('healthBadge').textContent=emoji;
+  document.getElementById('healthTitle').textContent=title;
+  document.getElementById('healthMsg').textContent=msg;
+  document.getElementById('hMargin').textContent=(ti>0?Math.round(margin*100)+'%':'\u2014');
+  document.getElementById('hProfit').textContent=money(profit);
+  document.getElementById('hCash').textContent=money(cash);
+  document.getElementById('hOwed').textContent=money(owedTot);
+}
+/* ---------- autocomplete keyword suggestions ---------- */
+function fillList(id,vals){
+  const dl=document.getElementById(id);if(!dl)return;
+  const uniq=[...new Set(vals.map(v=>(v||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  dl.innerHTML=uniq.map(v=>`<option value="${esc(v)}"></option>`).join('');
+}
+/* ---------- charge preview ---------- */
+function updateChargePreview(){
+  const el=document.getElementById('chargePreview');if(!el)return;
+  const amt=parseFloat(document.getElementById('amount').value)||0;
+  const pct=parseFloat(document.getElementById('chargePct').value)||0;
+  const cap=(choice.method==='Mobile money')?CHARGE_CAP_MOMO:CHARGE_CAP_BANK;
+  let fee=Math.round(amt*pct)/100;const capped=fee>cap;if(capped)fee=cap;
+  el.innerHTML=fee>0?('Fee: <b>'+money(fee)+'</b>'+(capped?(' \u2014 '+pct+'% capped at '+money(cap)):(' \u2014 '+pct+'% of '+money(amt)))+'. Total out: <b>'+money(amt+fee)+'</b>'):'';
+}
+['amount','chargePct'].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener('input',updateChargePreview);});
+
+/* ---------- log reminder ---------- */
+const REMIND_DAYS=7;
+let reminderDismissed=false;
+function updateLogReminder(){
+  const el=document.getElementById('logReminder');if(!el)return;
+  if(reminderDismissed){el.style.display='none';return;}
+  const dated=records.map(r=>r.date).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if(dated.length===0){el.style.display='none';return;}
+  const lastStr=dated[dated.length-1];
+  const days=Math.floor((Date.now()-new Date(lastStr+'T00:00:00').getTime())/86400000);
+  if(days>=REMIND_DAYS){
+    el.style.display='flex';
+    document.getElementById('logReminderText').textContent=`Your most recent entry is dated ${niceDate(lastStr)} \u2014 ${days} days ago. Log any newer transactions to keep your books current.`;
+  }else{el.style.display='none';}
+}
+(function(){const x=document.getElementById('logReminderX');if(x)x.addEventListener('click',()=>{reminderDismissed=true;document.getElementById('logReminder').style.display='none';});})();
+
+function updateSuggestions(){
+  fillList('dlClients',records.map(r=>r.client));
+  fillList('dlProjects',records.map(r=>r.project));
+  fillList('dlSubs',records.filter(r=>r.kind==='out').map(r=>r.subcontractor));
+  fillList('dlDescs',records.filter(r=>r.kind==='expense').map(r=>r.description));
+}
+/* ---------- export ---------- */
+const menu=document.getElementById('exportMenu');
+document.getElementById('exportBtn').addEventListener('click',e=>{e.stopPropagation();menu.classList.toggle('open');});
+document.addEventListener('click',()=>menu.classList.remove('open'));
+menu.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;menu.classList.remove('open');
+  const x=b.dataset.x;if(x==='csv')exportCSV();else if(x==='xlsx')exportExcel();else if(x==='pdf')exportPDF();});
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
+
+function exportCSV(){
+  if(records.length===0){toast('Nothing to export yet');return;}
+  const head=['Direction','Client','Project','Subcontractor','Description','Category','Amount (GHS)','Payment type','Method','Date','Project total (GHS)','Note'];
+  const lines=[head.join(',')];
+  const dir={in:'Money in',out:'Money out',job:'Owed job (unpaid)',expense:'Expense'};
+  records.forEach(r=>lines.push([dir[r.kind]||r.kind,r.client,r.project,r.subcontractor||'',r.description||'',r.category||'',r.amount,r.type||'',r.method,r.date,r.total||'',r.note||'']
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')));
+  dl(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv'}),'twelfth-space-ledger.csv');toast('Exported to CSV');
+}
+
+async function exportExcel(){
+  if(records.length===0){toast('Nothing to export yet');return;}
+  if(!window.ExcelJS){return exportExcelLegacy();}
+  toast('Building Excel\u2026');
+  const NAVY='FF3D4631',GREEN='FF3F8F5B',GOLD='FFD19A34',RED='FFB4573A',TEAL='FF3F8F92',OWE='FFCF4438',
+        LBLUE='FFE9F0DA',PINK='FFF4E4DD',LGREEN='FFDCEBEA',LOWE='FFF6E0DE',
+        WHITE='FFFFFFFF',BLUE='FF3F8F92',BLACK='FF242B1C',INK='FF3D4631';
+  const CUR='"GH\u20B5"#,##0.00;[Red]"-GH\u20B5"#,##0.00;"-"';
+  const DATEF='dd-mmm-yyyy', AR='Arial';
+  const solid=a=>({type:'pattern',pattern:'solid',fgColor:{argb:a}});
+  const thin={style:'thin',color:{argb:'FFDDE1E8'}}, bd={top:thin,left:thin,bottom:thin,right:thin};
+  const D=s=>s?new Date(s+'T00:00:00'):null;
+  const wb=new ExcelJS.Workbook();wb.creator='Twelfth Space';wb.created=new Date();
+
+  const groups=groupProjects();
+  const projAgreed={};groups.forEach(g=>{projAgreed[(g.client.trim().toLowerCase())+'||'+(g.project.trim().toLowerCase())]=(g.agreedSet?g.agreed:g.received);});
+  const ins=records.filter(r=>r.kind==='in'), jobs=records.filter(r=>r.kind==='job');
+  const payRows=[...ins].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const owedRows=[...jobs].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const exRows=[
+     ...records.filter(r=>r.kind==='expense').map(r=>({date:r.date,desc:r.description||'',cat:r.category||'Other',mode:r.method||'',amt:r.amount,note:r.note||''})),
+     ...records.filter(r=>r.kind==='out').map(r=>({date:r.date,desc:((r.subcontractor||'')+((r.client||r.project)?(' \u2014 '+((r.client||'')+(r.project?(' / '+r.project):'')).trim()):'')).trim(),cat:'Subcontractor',mode:r.method||'',amt:r.amount,note:r.note||''})),
+     ...records.filter(r=>(r.kind==='out'||r.kind==='expense')&&(r.charge||0)>0).map(r=>({date:r.date,desc:'Transaction charge \u2014 '+((r.kind==='out'?r.subcontractor:r.description)||''),cat:'Charges',mode:r.method||'',amt:r.charge,note:((r.chargePct||0)+'% fee')}))
+  ].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const plN=payRows.length, exN=exRows.length, owN=owedRows.length;
+  const plLast=Math.max(plN+1,2), exLast=Math.max(exN+1,2), owLast=Math.max(owN+1,2);
+
+  const headerRow=(ws,hs,fill)=>{const row=ws.getRow(1);row.values=hs;row.height=20;row.eachCell(c=>{c.font={name:AR,size:11,bold:true,color:{argb:WHITE}};c.fill=solid(fill);c.alignment={horizontal:'center',vertical:'middle'};c.border=bd;});};
+  const put=(ws,r,c,v,o={})=>{const cell=ws.getRow(r).getCell(c);cell.value=(v===''?null:v);if(o.fmt)cell.numFmt=o.fmt;cell.font={name:AR,size:11,bold:!!o.bold,color:{argb:o.color||BLACK}};cell.border=bd;return cell;};
+  const validate=(ws,col,fromR,toR,list)=>{for(let r=fromR;r<=toR;r++){ws.getCell(col+r).dataValidation={type:'list',allowBlank:true,formulae:['"'+list+'"']};}};
+
+  /* ===== Dashboard ===== */
+  const db=wb.addWorksheet('Dashboard',{views:[{showGridLines:false}]});
+  db.columns=[{width:30},{width:20},{width:3},{width:26},{width:20},{width:8}];
+  db.mergeCells('A1:F1');let c=db.getCell('A1');c.value='Twelfth Space \u2014 Finance Dashboard';c.font={name:AR,size:18,bold:true,color:{argb:WHITE}};c.fill=solid(NAVY);c.alignment={vertical:'middle',horizontal:'left',indent:1};db.getRow(1).height=34;
+  db.mergeCells('A2:F2');c=db.getCell('A2');c.value='Auto-updates from the Payments Log, Owed, Expenses & Savings sheets   |   Currency: Ghanaian Cedi (GH\u20B5)';c.font={name:AR,size:10,color:{argb:LBLUE}};c.fill=solid(NAVY);c.alignment={horizontal:'left',indent:1};db.getRow(2).height=18;
+  const card=(lr,vr,label,fill,val)=>{db.mergeCells(lr);db.mergeCells(vr);const lc=db.getCell(lr.split(':')[0]);lc.value=label;lc.font={name:AR,size:10,bold:true,color:{argb:WHITE}};lc.fill=solid(fill);lc.alignment={horizontal:'left',vertical:'middle',indent:1};const vc=db.getCell(vr.split(':')[0]);vc.value=val;vc.numFmt=CUR;vc.font={name:AR,size:18,bold:true,color:{argb:WHITE}};vc.fill=solid(fill);vc.alignment={horizontal:'left',vertical:'middle',indent:1};db.getRow(parseInt(vr.match(/\d+/)[0])).height=28;};
+  card('A5:B5','A6:B6','TOTAL RECEIVED',GREEN,{formula:"'Payments Log'!L3"});
+  card('D5:E5','D6:E6','OUTSTANDING (OWED TO YOU)',GOLD,{formula:"('Payments Log'!L2-'Payments Log'!L3)+Owed!G2"});
+  card('A8:B8','A9:B9','TOTAL EXPENSES',RED,{formula:"Expenses!H2"});
+  card('D8:E8','D9:E9','TOTAL SAVED',TEAL,{formula:"Savings!H2"});
+  card('A11:E11','A12:E12','NET CASH ON HAND  (received \u2212 expenses \u2212 saved)',NAVY,{formula:"'Payments Log'!L3-Expenses!H2-Savings!H2"});
+  db.mergeCells('A14:B14');c=db.getCell('A14');c.value='SUMMARY DETAIL';c.font={name:AR,size:11,bold:true,color:{argb:INK}};c.fill=solid(LBLUE);c.alignment={indent:1};
+  const det=[['Total Received',{formula:"'Payments Log'!L3"}],['Owed on invoiced work',{formula:"'Payments Log'!L2-'Payments Log'!L3"}],['Owed jobs (unpaid)',{formula:"Owed!G2"}],['Total Outstanding',{formula:"B16+B17"}]];
+  det.forEach((d,i)=>{const rr=15+i;const a=db.getCell('A'+rr);a.value=d[0];a.font={name:AR,size:11};a.border=bd;const b=db.getCell('B'+rr);b.value=d[1];b.numFmt=CUR;b.font={name:AR,size:11};b.alignment={horizontal:'right'};b.border=bd;});
+  db.mergeCells('A20:F20');c=db.getCell('A20');c.value='HOW TO USE';c.font={name:AR,size:11,bold:true,color:{argb:INK}};c.fill=solid(LBLUE);c.alignment={indent:1};
+  const how=[
+    "1. \u2018Payments Log\u2019 tab: log each client, project, the total agreed amount, and every payment as it arrives (deposit, part, full).",
+    "2. \u2018Owed\u2019 tab: money clients owe you for work not yet paid.",
+    "3. \u2018Expenses\u2019 tab: money you spend or pay out \u2014 subcontractor payouts are included here.",
+    "4. \u2018Savings\u2019 tab: money you move into savings or investments.",
+    "5. This Dashboard updates automatically. Google Sheets: File > Import > Upload this .xlsx > \u2018Replace spreadsheet\u2019."];
+  how.forEach((t,i)=>{const rr=21+i;db.mergeCells('A'+rr+':F'+rr);const cc=db.getCell('A'+rr);cc.value=t;cc.font={name:AR,size:10,color:{argb:BLACK}};cc.alignment={horizontal:'left',indent:1};});
+
+  /* ===== Payments Log ===== */
+  const pl=wb.addWorksheet('Payments Log',{views:[{state:'frozen',ySplit:1}]});
+  pl.columns=[{width:15},{width:20},{width:32},{width:16},{width:15},{width:14},{width:18},{width:20},{width:17},{width:26},{width:3},{width:20}];
+  headerRow(pl,['Date Received','Client Name','Project / Work Description','Payment Stage','Amount Paid','Payment Mode','Total Agreed Amount','Total Received to Date','Balance Remaining','Notes'],NAVY);
+  const seen={};
+  payRows.forEach((r,i)=>{const rr=i+2, key=(r.client.trim().toLowerCase())+'||'+(r.project.trim().toLowerCase());
+    let agreed='';if(!seen[key]){seen[key]=true;agreed=(key in projAgreed)?projAgreed[key]:r.amount;}
+    put(pl,rr,1,D(r.date),{fmt:DATEF,color:BLUE});
+    put(pl,rr,2,r.client||'');put(pl,rr,3,r.project||'');
+    put(pl,rr,4,r.type||'Full payment');
+    put(pl,rr,5,r.amount,{fmt:CUR,color:BLUE});
+    put(pl,rr,6,r.method||'');
+    put(pl,rr,7,agreed,{fmt:CUR,color:BLUE});
+    put(pl,rr,8,{formula:`IF(B${rr}="","",SUMIFS($E$2:$E${rr},$B$2:$B${rr},B${rr},$C$2:$C${rr},C${rr}))`},{fmt:CUR});
+    put(pl,rr,9,{formula:`IF(G${rr}="","",G${rr}-SUMIFS($E$2:$E$${plLast},$B$2:$B$${plLast},B${rr},$C$2:$C$${plLast},C${rr}))`},{fmt:CUR});
+    put(pl,rr,10,r.note||'');});
+  pl.getCell('L1').value='TOTALS';pl.getCell('L1').font={name:AR,size:11,bold:true,color:{argb:INK}};
+  pl.getCell('K2').value='Total Agreed Value';pl.getCell('K2').font={name:AR,size:11,color:{argb:INK}};pl.getCell('K2').alignment={horizontal:'right'};
+  let lc2=pl.getCell('L2');lc2.value=plN?{formula:`SUM(G2:G${plLast})`}:0;lc2.numFmt=CUR;lc2.font={name:AR,size:11,bold:true};lc2.fill=solid(LBLUE);lc2.border=bd;
+  pl.getCell('K3').value='Total Received';pl.getCell('K3').font={name:AR,size:11,color:{argb:INK}};pl.getCell('K3').alignment={horizontal:'right'};
+  let lc3=pl.getCell('L3');lc3.value=plN?{formula:`SUM(E2:E${plLast})`}:0;lc3.numFmt=CUR;lc3.font={name:AR,size:11,bold:true};lc3.fill=solid(LBLUE);lc3.border=bd;
+  validate(pl,'D',2,plLast+30,'Full payment,Part payment,Deposit');
+  validate(pl,'F',2,plLast+30,'Bank,Mobile money');
+
+  /* ===== Owed (receivables) ===== */
+  const ow=wb.addWorksheet('Owed',{views:[{state:'frozen',ySplit:1}]});
+  ow.columns=[{width:15},{width:22},{width:34},{width:16},{width:28},{width:3},{width:18}];
+  headerRow(ow,['Date Logged','Client','Project / Work Description','Amount Owed','Notes'],OWE);
+  owedRows.forEach((r,i)=>{const rr=i+2;
+    put(ow,rr,1,D(r.date),{fmt:DATEF,color:BLUE});
+    put(ow,rr,2,r.client||'');put(ow,rr,3,r.project||'');
+    put(ow,rr,4,r.amount,{fmt:CUR,color:BLUE});put(ow,rr,5,r.note||'');});
+  ow.getCell('G1').value='TOTAL OWED';ow.getCell('G1').font={name:AR,size:11,bold:true,color:{argb:INK}};
+  let oc=ow.getCell('G2');oc.value=owN?{formula:`SUM(D2:D${owLast})`}:0;oc.numFmt=CUR;oc.fill=solid(LOWE);oc.font={name:AR,size:11,bold:true};oc.border=bd;
+
+  /* ===== Expenses ===== */
+  const ex=wb.addWorksheet('Expenses',{views:[{state:'frozen',ySplit:1}]});
+  ex.columns=[{width:15},{width:34},{width:20},{width:14},{width:15},{width:28},{width:3},{width:22}];
+  headerRow(ex,['Date','Description','Category','Payment Mode','Amount','Notes'],RED);
+  exRows.forEach((r,i)=>{const rr=i+2;
+    put(ex,rr,1,D(r.date),{fmt:DATEF,color:BLUE});put(ex,rr,2,r.desc);put(ex,rr,3,r.cat);
+    put(ex,rr,4,r.mode);put(ex,rr,5,r.amt,{fmt:CUR,color:BLUE});put(ex,rr,6,r.note);});
+  ex.getCell('H1').value='TOTAL EXPENSES';ex.getCell('H1').font={name:AR,size:11,bold:true,color:{argb:INK}};
+  let hc=ex.getCell('H2');hc.value=exN?{formula:`SUM(E2:E${exLast})`}:0;hc.numFmt=CUR;hc.fill=solid(PINK);hc.font={name:AR,size:11,bold:true};hc.border=bd;
+  validate(ex,'C',2,exLast+30,'Internet Data,Subscriptions,Transport,Design and Printing,Delivery,Asset,Owner draw,Subcontractor,Charges,Other');
+  validate(ex,'D',2,exLast+30,'Bank,Mobile money,Cash');
+
+  /* ===== Savings ===== */
+  const sv=wb.addWorksheet('Savings',{views:[{state:'frozen',ySplit:1}]});
+  sv.columns=[{width:15},{width:30},{width:16},{width:16},{width:16},{width:28},{width:3},{width:22}];
+  headerRow(sv,['Date','Description','Payment Mode','Amount Saved','Running Total','Notes'],TEAL);
+  for(let rr=2;rr<=21;rr++){const cell=sv.getCell('E'+rr);cell.value={formula:`IF(A${rr}="","",SUM($D$2:D${rr}))`};cell.numFmt=CUR;cell.font={name:AR,size:11};}
+  sv.getCell('H1').value='TOTAL SAVED';sv.getCell('H1').font={name:AR,size:11,bold:true,color:{argb:INK}};
+  hc=sv.getCell('H2');hc.value={formula:`SUM(D2:D201)`};hc.numFmt=CUR;hc.fill=solid(LGREEN);hc.font={name:AR,size:11,bold:true};hc.border=bd;
+  validate(sv,'C',2,201,'Bank,Mobile money,Cash');
+
+  /* ===== Cash Ledger (audit-ready running balance) ===== */
+  const cashSign={'in':1,'loanpay':1,'out':-1,'expense':-1};
+  const openBank=anchorBank, openMomo=anchorMomo;
+  const cashRecs=records.filter(r=>cashSign[r.kind]&&String(r.id).indexOf('seed-')!==0).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(String(a.id)>String(b.id)?1:-1));
+  const cl=wb.addWorksheet('Cash Ledger',{views:[{state:'frozen',ySplit:1}]});
+  cl.columns=[{width:14},{width:36},{width:16},{width:14},{width:14},{width:14},{width:16},{width:16}];
+  headerRow(cl,['Date','Description','Category','Method','Money In','Money Out','Bank Balance','MoMo Balance'],NAVY);
+  let runB=openBank, runM=openMomo, rr=2;
+  put(cl,rr,1,null);put(cl,rr,2,'Opening balance (as of tracking baseline)',{bold:true});put(cl,rr,3,'');put(cl,rr,4,'');put(cl,rr,5,null);put(cl,rr,6,null);
+  put(cl,rr,7,openBank,{fmt:CUR,bold:true});put(cl,rr,8,openMomo,{fmt:CUR,bold:true});
+  cl.getRow(rr).eachCell(c=>{c.fill=solid(LBLUE);});rr++;
+  cashRecs.forEach(r=>{
+    const isIn=(r.kind==='in'||r.kind==='loanpay');
+    const desc=r.kind==='expense'?(r.description||'Expense')
+      :r.kind==='out'?((r.subcontractor||'Subcontractor')+((r.client||r.project)?(' \u2014 '+((r.client||'')+(r.project?(' / '+r.project):'')).trim()):''))
+      :r.kind==='loanpay'?((r.client||'')+' \u2014 loan repayment')
+      :((r.client||'')+(r.project?(' / '+r.project):'')).trim();
+    const cat=r.kind==='in'?'Client payment':r.kind==='loanpay'?'Loan repayment':r.kind==='out'?'Subcontractor':(r.category||'Expense');
+    if(r.method==='Mobile money')runM+=(isIn?r.amount:-r.amount);else runB+=(isIn?r.amount:-r.amount);
+    put(cl,rr,1,D(r.date),{fmt:DATEF});put(cl,rr,2,desc);put(cl,rr,3,cat);put(cl,rr,4,r.method||'');
+    put(cl,rr,5,isIn?r.amount:null,{fmt:CUR});put(cl,rr,6,isIn?null:r.amount,{fmt:CUR});
+    put(cl,rr,7,runB,{fmt:CUR});put(cl,rr,8,runM,{fmt:CUR});rr++;
+    if((r.kind==='out'||r.kind==='expense')&&(r.charge||0)>0){
+      if(r.method==='Mobile money')runM-=r.charge;else runB-=r.charge;
+      put(cl,rr,1,D(r.date),{fmt:DATEF});put(cl,rr,2,'   \u21B3 Transaction charge');put(cl,rr,3,'Bank/MoMo charge');put(cl,rr,4,r.method||'');
+      put(cl,rr,5,null);put(cl,rr,6,r.charge,{fmt:CUR});put(cl,rr,7,runB,{fmt:CUR});put(cl,rr,8,runM,{fmt:CUR});rr++;
+    }
+  });
+  put(cl,rr,1,null);put(cl,rr,2,'Closing balance (should match your bank statements)',{bold:true});put(cl,rr,3,'');put(cl,rr,4,'');put(cl,rr,5,null);put(cl,rr,6,null);
+  put(cl,rr,7,runB,{fmt:CUR,bold:true});put(cl,rr,8,runM,{fmt:CUR,bold:true});
+  cl.getRow(rr).eachCell(c=>{c.fill=solid(LBLUE);});
+
+  const buf=await wb.xlsx.writeBuffer();
+  dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'twelfth-space-finance.xlsx');
+  toast('Exported to Excel');
+}
+function exportExcelLegacy(){
+  const ins=records.filter(r=>r.kind==='in'), outs=records.filter(r=>r.kind==='out'), exps=records.filter(r=>r.kind==='expense'), groups=groupProjects();
+  if(window.XLSX){
+    const wb=XLSX.utils.book_new();
+    const s1=XLSX.utils.json_to_sheet(ins.map(r=>({Client:r.client,Project:r.project,'Amount (GHS)':r.amount,Type:r.type,Method:r.method,Date:r.date,'Project total (GHS)':r.total||''})));
+    XLSX.utils.book_append_sheet(wb,s1,'Payments');
+    const s2=XLSX.utils.json_to_sheet(outs.map(r=>({Subcontractor:r.subcontractor,Client:r.client,Project:r.project,'Amount (GHS)':r.amount,Method:r.method,Date:r.date,Note:r.note||''})));
+    XLSX.utils.book_append_sheet(wb,s2,'Subcontractors');
+    const s4=XLSX.utils.json_to_sheet(exps.map(r=>({Description:r.description,Category:r.category,'Amount (GHS)':r.amount,Method:r.method,Date:r.date,Note:r.note||''})));
+    XLSX.utils.book_append_sheet(wb,s4,'Expenses');
+    XLSX.writeFile(wb,'twelfth-space-ledger.xlsx');toast('Exported to Excel');
+  }else{toast('Excel export unavailable');}
+}
+
+function exportPDF(){
+  if(records.length===0){toast('Nothing to export yet');return;}
+  const ins=records.filter(r=>r.kind==='in'), outs=records.filter(r=>r.kind==='out'), exps=records.filter(r=>r.kind==='expense');
+  const totalIn=ins.reduce((s,r)=>s+r.amount,0), totalOut=outs.reduce((s,r)=>s+r.amount,0), totalExp=exps.reduce((s,r)=>s+r.amount,0);
+  if(window.jspdf&&window.jspdf.jsPDF){
+    const {jsPDF}=window.jspdf;const doc=new jsPDF();
+    doc.setFontSize(18);doc.setTextColor(61,70,49);doc.text('Twelfth Space',14,18);
+    doc.setFontSize(11);doc.setTextColor(120);doc.text('Client payments & subcontractor statement',14,25);
+    doc.setFontSize(9);doc.text('Generated '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}),14,31);
+    doc.autoTable({startY:37,head:[['Client','Project','Amount','Type','Method','Date']],
+      body:ins.map(r=>[r.client,r.project,ghs(r.amount),r.type,r.method,niceDate(r.date)]),
+      styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[61,70,49],textColor:255},alternateRowStyles:{fillColor:[244,247,236]},columnStyles:{2:{halign:'right'}}});
+    let y=doc.lastAutoTable.finalY+8;
+    if(outs.length){doc.setFontSize(11);doc.setTextColor(61,70,49);doc.text('Subcontractor payouts',14,y);y+=3;
+      doc.autoTable({startY:y,head:[['Subcontractor','Client / Project','Amount','Method','Date']],
+        body:outs.map(r=>[r.subcontractor,r.client+' — '+r.project,ghs(r.amount),r.method,niceDate(r.date)]),
+        styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[207,122,44],textColor:255},alternateRowStyles:{fillColor:[250,244,236]},columnStyles:{2:{halign:'right'}}});
+      y=doc.lastAutoTable.finalY;}
+    if(exps.length){y+=8;doc.setFontSize(11);doc.setTextColor(61,70,49);doc.text('Expenses',14,y);y+=3;
+      doc.autoTable({startY:y,head:[['Description','Category','Amount','Method','Date']],
+        body:exps.map(r=>[r.description,r.category,ghs(r.amount),r.method,niceDate(r.date)]),
+        styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[180,87,58],textColor:255},alternateRowStyles:{fillColor:[249,242,238]},columnStyles:{2:{halign:'right'}}});
+      y=doc.lastAutoTable.finalY;}
+    if(y>232){doc.addPage();y=14;}
+    y+=10;doc.setFontSize(11);doc.setTextColor(61,70,49);
+    doc.text('Received from clients:  '+ghs(totalIn),14,y);
+    doc.text('Paid to subcontractors:  '+ghs(totalOut),14,y+6);
+    doc.text('Total expenses:  '+ghs(totalExp),14,y+12);
+    doc.setFont(undefined,'bold');doc.text('Net profit:  '+ghs(totalIn-totalOut-totalExp),14,y+18);doc.setFont(undefined,'normal');
+    const avail=(position.bank||0)+(position.momo||0);const gr=groupProjects();let ow=0;gr.forEach(g=>{if(g.agreedSet){const b=g.agreed-g.received;if(b>0.005)ow+=b;}});
+    doc.text('Cash available now (bank + MoMo):  '+ghs(avail),14,y+26);
+    doc.text('Treasury Bill (invested):  '+ghs(TBILL),14,y+32);
+    doc.text('Clients owe:  '+ghs(ow),14,y+38);
+    doc.text('Loan out ('+LOAN_NAME+', refundable):  '+ghs(LOAN_AMOUNT),14,y+44);
+    doc.save('twelfth-space-statement.pdf');toast('Exported to PDF');
+  }else{toast('Opening print — choose "Save as PDF"');setTimeout(()=>window.print(),400);}
+}
+
+function refreshPosition(){
+  let bankFlow=0,momoFlow=0,loanPaid=0;
+  records.forEach(r=>{
+    if(r.kind==='loanpay'){loanPaid+=r.amount; if(r.method==='Mobile money')momoFlow+=r.amount; else bankFlow+=r.amount; return;}
+    if(String(r.id).indexOf('seed-')===0)return;          // history already baked into today's balance
+    let sign=0; if(r.kind==='in')sign=1; else if(r.kind==='out'||r.kind==='expense')sign=-1;
+    if(!sign)return;                                        // owed jobs don't move cash
+    const moved=r.amount+((r.kind==='out'||r.kind==='expense')?(r.charge||0):0);
+    if(r.method==='Mobile money')momoFlow+=sign*moved; else bankFlow+=sign*moved;
+  });
+  lastBankFlow=bankFlow;lastMomoFlow=momoFlow;lastLoanPaid=loanPaid;
+  const bank=anchorBank+bankFlow, momo=anchorMomo+momoFlow, cash=bank+momo;
+  const loanLeft=Math.max(LOAN_AMOUNT-loanPaid,0);
+  position.bank=bank;position.momo=momo;position.tbill=TBILL;position.loanName=LOAN_NAME;position.loanAmount=loanLeft;
+  document.getElementById('posBank').textContent=money(bank);
+  document.getElementById('posMomo').textContent=money(momo);
+  document.getElementById('posAvail').textContent=money(cash);
+  document.getElementById('posTbill').textContent=money(TBILL);
+  document.getElementById('posHold').textContent=money(cash+TBILL);
+  const groups=groupProjects();const byClient={};
+  groups.forEach(g=>{if(g.agreedSet){const b=g.agreed-g.received;if(b>0.005){byClient[g.client]=(byClient[g.client]||0)+b;}}});
+  const debtors=Object.keys(byClient).sort((a,b)=>byClient[b]-byClient[a]);
+  const cont=document.getElementById('debtorRows');
+  if(debtors.length===0){cont.innerHTML='<div class="debtor-empty">No client owes money right now.</div>';}
+  else{cont.innerHTML=debtors.map(n=>`<div class="pos-row"><label>${esc(n)}</label><div class="pval2">${money(byClient[n])}</div></div>`).join('');}
+  document.getElementById('posLoanName').textContent=LOAN_NAME;
+  document.getElementById('posLoan').textContent=money(loanLeft);
+  document.getElementById('loanRow').style.display=loanLeft>0.005?'':'none';
+  const clientsOwe=debtors.reduce((s,n)=>s+byClient[n],0);
+  document.getElementById('posOwed').textContent=money(clientsOwe+loanLeft);
+}
+/* ---------- auth flow ---------- */
+const authGate=document.getElementById('authGate');
+const authMsg=document.getElementById('authMsg');
+function showAuth(){authGate.classList.add('show');document.querySelector('.wrap').style.display='none';}
+function hideAuth(){authGate.classList.remove('show');document.querySelector('.wrap').style.display='';}
+function setMsg(t,cls){authMsg.textContent=t||'';authMsg.className='auth-msg'+(cls?' '+cls:'');}
+function busy(b){document.getElementById('authSignIn').disabled=b;document.getElementById('authSignUp').disabled=b;}
+
+async function startApp(){ hideAuth(); try{ await pullRemote(); }catch(e){ cloudOK=false; } await load(); updateSyncBadge(); }
+function updateSyncBadge(){
+  const b=document.getElementById('syncBadge'); if(!b)return;
+  if(cloudOK){ b.style.display='none'; }
+  else{ b.style.display='block'; b.textContent='⚠ Cloud sync is off — your data is safe on this device. '+(lastSyncErr?('('+lastSyncErr+')'):''); }
+}
+
+async function doAuth(kind){
+  if(!sb){setMsg('Sync library failed to load — refresh the page.','err');return;}
+  const email=document.getElementById('authEmail').value.trim();
+  const pass=document.getElementById('authPass').value;
+  if(!email||!pass){setMsg('Enter your email and password.','err');return;}
+  if(pass.length<6){setMsg('Password must be at least 6 characters.','err');return;}
+  busy(true);setMsg(kind==='up'?'Creating your account…':'Signing in…');
+  try{
+    const fn=kind==='up'?sb.auth.signUp({email,password:pass}):sb.auth.signInWithPassword({email,password:pass});
+    const {data,error}=await fn;
+    if(error){setMsg(error.message,'err');busy(false);return;}
+    if(!data.session){setMsg('Account created. Now tap “Sign in”.','ok');busy(false);return;}
+    cloudUser=data.user; setMsg('');busy(false); await startApp();
+  }catch(e){setMsg('Something went wrong — try again.','err');busy(false);}
+}
+document.getElementById('authSignIn').addEventListener('click',()=>doAuth('in'));
+document.getElementById('authSignUp').addEventListener('click',()=>doAuth('up'));
+document.getElementById('authPass').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth('in');});
+const _signOut=document.getElementById('signOutBtn');
+if(_signOut)_signOut.addEventListener('click',async()=>{try{await pushNow();}catch(e){}try{await sb.auth.signOut();}catch(e){}cloudUser=null;cloudCache=null;location.reload();});
+
+/* refresh from cloud when you come back to the tab */
+let _refreshing=false;
+async function refreshFromCloud(){
+  if(_refreshing||!cloudUser||pushPending)return;_refreshing=true;
+  try{await pullRemote();await load();}catch(e){}_refreshing=false;
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshFromCloud();});
+window.addEventListener('focus',refreshFromCloud);
+
+/* boot */
+(async function boot(){
+  if(!sb){showAuth();setMsg('Sync library failed to load — refresh the page.','err');return;}
+  try{
+    const {data}=await sb.auth.getSession();
+    if(data&&data.session){cloudUser=data.session.user;await startApp();}
+    else{showAuth();}
+  }catch(e){showAuth();}
+})();
+</script>
+</body>
+</html>
